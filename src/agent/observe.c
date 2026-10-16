@@ -20,17 +20,23 @@
 #include "translation/translation.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define MAX_LAYERS 4
+#define MAX_LAYERS 5
 
 typedef enum {
     LAYER_TERRAIN,
     LAYER_DESIRABILITY,
-    LAYER_WATER
+    LAYER_WATER,
+    LAYER_FIRE,
+    LAYER_DAMAGE
 } map_layer;
 
-static const char *LAYER_NAMES[] = { "terrain", "desirability", "water" };
+static const char *LAYER_NAMES[] = { "terrain", "desirability", "water", "fire", "damage" };
+
+#define FIRE_RISK_MAX 100   // a building catches fire above this (building/maintenance.c)
+#define DAMAGE_RISK_MAX 200 // a building collapses above this
 
 static void write_error(json_writer *w, const char *message)
 {
@@ -422,6 +428,30 @@ static char water_char(int grid_offset)
     return '.';
 }
 
+/** Fire or collapse risk of the building on a tile, in tenths of the way to disaster */
+static char risk_char(int grid_offset, int fire)
+{
+    int building_id = map_building_at(grid_offset);
+    if (!building_id) {
+        return '.';
+    }
+    building *b = building_main(building_get(building_id));
+    if (b->type == BUILDING_BURNING_RUIN) {
+        return '!';
+    }
+    if (b->state != BUILDING_STATE_IN_USE && b->state != BUILDING_STATE_CREATED) {
+        return '.';
+    }
+    if (b->fire_proof || building_properties_for_type(b->type)->shared) {
+        return '-';
+    }
+    int risk = fire ? b->fire_risk * 10 / FIRE_RISK_MAX : b->damage_risk * 10 / DAMAGE_RISK_MAX;
+    if (risk < 0) {
+        risk = 0;
+    }
+    return (char) ('0' + (risk > 9 ? 9 : risk));
+}
+
 static void write_legend(json_writer *w, map_layer layer)
 {
     switch (layer) {
@@ -438,6 +468,14 @@ static void write_legend(json_writer *w, map_layer layer)
             break;
         case LAYER_WATER:
             json_string(w, "legend", "f=fountain range r=reservoir range b=both .=none (wells are per house)");
+            break;
+        case LAYER_FIRE:
+            json_string(w, "legend", "fire risk per building, 0-9 = tenths of the way to catching fire (prefects passing "
+                "reset it; 7+ = no prefect coverage) -=fireproof !=burning .=no building");
+            break;
+        case LAYER_DAMAGE:
+            json_string(w, "legend", "collapse risk per building, 0-9 = tenths of the way to collapsing (engineers "
+                "passing reset it; 7+ = no engineer coverage) -=can't collapse .=no building");
             break;
     }
 }
@@ -476,7 +514,7 @@ void agent_observe_map(json_writer *w, const char *args)
             }
         }
         if (!found) {
-            write_error(w, "unknown layer; use terrain, desirability, water");
+            write_error(w, "unknown layer; use terrain, desirability, water, fire, damage");
             return;
         }
     }
@@ -526,6 +564,12 @@ void agent_observe_map(json_writer *w, const char *args)
                         break;
                     case LAYER_WATER:
                         c = water_char(grid_offset);
+                        break;
+                    case LAYER_FIRE:
+                        c = risk_char(grid_offset, 1);
+                        break;
+                    case LAYER_DAMAGE:
+                        c = risk_char(grid_offset, 0);
                         break;
                     default:
                         c = agent_tile_char(grid_offset);
@@ -811,4 +855,66 @@ void agent_observe_buildable(json_writer *w)
         json_object_end(w);
     }
     json_array_end(w);
+}
+
+typedef struct {
+    int id;
+    int fire;
+    int damage;
+} risk_entry;
+
+static int compare_risk(const void *a, const void *b)
+{
+    const risk_entry *ra = a, *rb = b;
+    int max_a = ra->fire > ra->damage ? ra->fire : ra->damage;
+    int max_b = rb->fire > rb->damage ? rb->fire : rb->damage;
+    return max_b - max_a;
+}
+
+void agent_observe_risks(json_writer *w, const char *args)
+{
+    int threshold = 60;
+    if (args && *args && (sscanf(args, "%d", &threshold) != 1 || threshold < 0 || threshold > 100)) {
+        write_error(w, "usage: risks [min percent 0-100, default 60]");
+        return;
+    }
+    static risk_entry entries[5000];
+    int count = 0;
+    for (int id = 1; id < building_count() && count < 5000; id++) {
+        building *b = building_get(id);
+        if (!is_listable(b) || b->fire_proof || building_properties_for_type(b->type)->shared) {
+            continue;
+        }
+        int fire = b->fire_risk * 100 / FIRE_RISK_MAX;
+        int damage = b->damage_risk * 100 / DAMAGE_RISK_MAX;
+        if (fire >= threshold || damage >= threshold) {
+            entries[count].id = id;
+            entries[count].fire = fire;
+            entries[count].damage = damage;
+            count++;
+        }
+    }
+    qsort(entries, count, sizeof(risk_entry), compare_risk);
+    json_bool(w, "ok", 1);
+    json_int(w, "threshold_percent", threshold);
+    json_array_start(w, "at_risk");
+    for (int i = 0; i < count; i++) {
+        building *b = building_get(entries[i].id);
+        json_object_start(w, 0);
+        json_int(w, "id", b->id);
+        json_string(w, "type", agent_building_type_name(b->type));
+        json_int(w, "x", b->x);
+        json_int(w, "y", b->y);
+        json_int(w, "fire_percent", entries[i].fire);
+        json_int(w, "collapse_percent", entries[i].damage);
+        json_object_end(w);
+    }
+    json_array_end(w);
+    int burning = 0;
+    for (building *b = building_first_of_type(BUILDING_BURNING_RUIN); b; b = b->next_of_type) {
+        if (b->state == BUILDING_STATE_IN_USE) {
+            burning++;
+        }
+    }
+    json_int(w, "burning_now", burning);
 }

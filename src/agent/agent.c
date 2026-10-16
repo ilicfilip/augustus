@@ -486,6 +486,7 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "buildings [type]");
     json_string(w, 0, "houses [x y w h]");
     json_string(w, 0, "buildable");
+    json_string(w, 0, "risks [min percent]");
     json_string(w, 0, "build <type> <x> <y> [x2 y2]");
     json_string(w, 0, "clear <x> <y> [x2 y2]");
     json_string(w, 0, "undo");
@@ -542,6 +543,13 @@ static void execute(char *line)
         cmd_play(&w, args);
     } else if (strcmp(line, "step") == 0) {
         cmd_step(&w, args);
+    } else if (strcmp(line, "risks") == 0) {
+        if (!is_city_window()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else {
+            agent_observe_risks(&w, args);
+        }
     } else if (strcmp(line, "buildable") == 0) {
         if (!is_city_window()) {
             write_error(&w, "no city on screen");

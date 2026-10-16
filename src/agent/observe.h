@@ -12,6 +12,9 @@ void agent_observe_buildings(json_writer *w, const char *args);
 /** houses [x y w h] - houses with what they have and what they need to evolve */
 void agent_observe_houses(json_writer *w, const char *args);
 
+/** risks [min percent] - buildings (incl. houses) close to catching fire or collapsing, worst first */
+void agent_observe_risks(json_writer *w, const char *args);
+
 /** buildable - building types available in this mission, with cost, size and workers */
 void agent_observe_buildable(json_writer *w);
 
