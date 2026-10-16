@@ -131,6 +131,19 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
     }
     json_int(w, "cost", cost);
     json_int(w, "treasury", city_finance_treasury());
+    int tile_cost = model_get_building(type)->cost;
+    if (changed && tile_cost > 0 && (type == BUILDING_ROAD || type == BUILDING_AQUEDUCT || type == BUILDING_WALL)) {
+        // Like the mouse drag, these are routed around obstacles (trees, rocks, buildings): report detours
+        int tiles = cost / tile_cost;
+        int straight = (x2 > x ? x2 - x : x - x2) + (y2 > y ? y2 - y : y - y2) + 1;
+        json_int(w, "tiles", tiles);
+        json_int(w, "straight_tiles", straight);
+        if (tiles > straight) {
+            json_bool(w, "detour", 1);
+            json_string(w, "note", "routed around obstacles; for a straight line clear trees/rubble on the direct "
+                "path first (clear), rocks and water can't be cleared");
+        }
+    }
     write_warnings(w);
     write_tile(w, x, y);
     window_invalidate();

@@ -2,12 +2,15 @@
 
 #include "building/building.h"
 #include "building/house_evolution.h"
+#include "building/industry.h"
 #include "building/count.h"
 #include "building/menu.h"
 #include "building/monument.h"
 #include "building/properties.h"
 #include "core/encoding.h"
 #include "core/lang.h"
+#include "city/resource.h"
+#include "core/calc.h"
 #include "game/resource.h"
 #include "map/building.h"
 #include "map/desirability.h"
@@ -655,6 +658,27 @@ void agent_observe_buildings(json_writer *w, const char *args)
             json_object_end(w);
         } else {
             write_stock(w, b);
+        }
+        if (building_is_farm(b->type) || building_is_raw_resource_producer(b->type) ||
+            building_is_workshop(b->type)) {
+            // Why a producer isn't delivering: progress towards the next load, lack of raw materials,
+            // or its output being held back (stockpiled city-wide or on this building)
+            json_object_start(w, "production");
+            json_string(w, "output", agent_resource_name(b->output_resource_id));
+            json_int(w, "progress_percent", calc_bound(calc_percentage(b->data.industry.progress,
+                building_industry_get_max_progress(b)), 0, 100));
+            json_int(w, "efficiency", building_get_efficiency(b));
+            json_int(w, "average_per_month", b->data.industry.average_production_per_month);
+            if (building_is_workshop(b->type)) {
+                json_bool(w, "has_raw_materials", building_industry_has_raw_materials_for_production(b));
+            }
+            if (building_stockpiling_enabled(b)) {
+                json_bool(w, "stockpiling", 1);
+            }
+            if (city_resource_is_stockpiled(b->output_resource_id)) {
+                json_bool(w, "city_stockpiled", 1);
+            }
+            json_object_end(w);
         }
         json_object_end(w);
     }
