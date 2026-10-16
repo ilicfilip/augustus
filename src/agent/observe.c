@@ -32,22 +32,106 @@ static void write_error(json_writer *w, const char *message)
     json_string(w, "error", message);
 }
 
-const char *agent_building_type_name(int type)
-{
-    static char fallback[24];
-    if (type > BUILDING_NONE && type < BUILDING_TYPE_MAX) {
-        const building_properties *props = building_properties_for_type(type);
-        if (props && props->event_data.attr) {
-            return props->event_data.attr;
-        }
-    }
-    snprintf(fallback, sizeof(fallback), "type_%d", type);
-    return fallback;
-}
-
 static int is_house(building_type type)
 {
     return type >= BUILDING_HOUSE_VACANT_LOT && type <= BUILDING_HOUSE_LUXURY_PALACE;
+}
+
+static int is_menu_group(building_type type)
+{
+    switch (type) {
+        case BUILDING_ANY:
+        case BUILDING_MENU_FARMS:
+        case BUILDING_MENU_RAW_MATERIALS:
+        case BUILDING_MENU_WORKSHOPS:
+        case BUILDING_MENU_FORT:
+        case BUILDING_MENU_SMALL_TEMPLES:
+        case BUILDING_MENU_LARGE_TEMPLES:
+        case BUILDING_MENU_GRAND_TEMPLES:
+        case BUILDING_MENU_TREES:
+        case BUILDING_MENU_PATHS:
+        case BUILDING_MENU_PARKS:
+        case BUILDING_MENU_STATUES:
+        case BUILDING_MENU_GOV_RES:
+        case BUILDING_MENU_SHRINES:
+        case BUILDING_MENU_GARDENS:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+/**
+ * The game's names come from scenario-event attributes, which may be alias lists like
+ * "goddess_statue|small_statue_alt". Copies alias number `index` into `out`; returns 0 if there is none.
+ */
+static int get_alias(building_type type, int index, char *out, size_t size)
+{
+    const building_properties *props = building_properties_for_type(type);
+    if (!props || !props->event_data.attr) {
+        return 0;
+    }
+    const char *start = props->event_data.attr;
+    for (int i = 0; i < index; i++) {
+        start = strchr(start, '|');
+        if (!start) {
+            return 0;
+        }
+        start++;
+    }
+    size_t len = strcspn(start, "|");
+    if (len == 0 || len >= size) {
+        return 0;
+    }
+    memcpy(out, start, len);
+    out[len] = 0;
+    return 1;
+}
+
+const char *agent_building_type_name(int type)
+{
+    static char name[48];
+    if (type == BUILDING_HOUSE_VACANT_LOT) {
+        return "vacant_lot";
+    }
+    if (type > BUILDING_NONE && type < BUILDING_TYPE_MAX && get_alias(type, 0, name, sizeof(name))) {
+        if (is_house(type)) {
+            // e.g. the small tent's aliases are "vacant_lot|house_small_tent|housing"
+            char alias[48];
+            for (int i = 0; get_alias(type, i, alias, sizeof(alias)); i++) {
+                if (strncmp(alias, "house_", 6) == 0) {
+                    strcpy(name, alias);
+                    break;
+                }
+            }
+        }
+        return name;
+    }
+    snprintf(name, sizeof(name), "type_%d", type);
+    return name;
+}
+
+int agent_building_type_from_name(const char *name)
+{
+    if (strcmp(name, "housing") == 0 || strcmp(name, "vacant_lot") == 0) {
+        return BUILDING_HOUSE_VACANT_LOT;
+    }
+    if (strncmp(name, "house_", 6) == 0) {
+        return BUILDING_NONE; // houses grow from housing plots, they can't be built directly
+    }
+    // The first match wins, e.g. "reservoir" is the draggable reservoir the build menu uses
+    char alias[48];
+    for (int type = BUILDING_NONE + 1; type < BUILDING_TYPE_MAX; type++) {
+        if (is_menu_group(type) || is_house(type)) {
+            continue;
+        }
+        for (int i = 0; get_alias(type, i, alias, sizeof(alias)); i++) {
+            if (strcmp(alias, name) == 0) {
+                return type;
+            }
+        }
+    }
+    return BUILDING_NONE;
 }
 
 static char building_char(building_type type)
@@ -202,12 +286,13 @@ static char building_char(building_type type)
     }
 }
 
-static char terrain_char(int grid_offset)
+char agent_tile_char(int grid_offset)
 {
     int building_id = map_building_at(grid_offset);
     if (building_id) {
         building *b = building_get(building_id);
-        if (b->state == BUILDING_STATE_IN_USE || b->state == BUILDING_STATE_MOTHBALLED) {
+        if (b->state == BUILDING_STATE_IN_USE || b->state == BUILDING_STATE_MOTHBALLED ||
+            b->state == BUILDING_STATE_CREATED) {
             return building_char(b->type);
         }
     }
@@ -395,7 +480,7 @@ void agent_observe_map(json_writer *w, const char *args)
                         c = water_char(grid_offset);
                         break;
                     default:
-                        c = terrain_char(grid_offset);
+                        c = agent_tile_char(grid_offset);
                         break;
                 }
                 row[xx - x] = c;
@@ -411,7 +496,9 @@ void agent_observe_map(json_writer *w, const char *args)
 
 static int is_listable(const building *b)
 {
-    if (b->state != BUILDING_STATE_IN_USE && b->state != BUILDING_STATE_MOTHBALLED) {
+    // CREATED = placed this tick, becomes IN_USE on the next building state update
+    if (b->state != BUILDING_STATE_IN_USE && b->state != BUILDING_STATE_MOTHBALLED &&
+        b->state != BUILDING_STATE_CREATED) {
         return 0;
     }
     if (b->prev_part_building_id || b->type == BUILDING_WAREHOUSE_SPACE) {

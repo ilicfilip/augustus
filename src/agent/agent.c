@@ -1,8 +1,10 @@
 #include "agent.h"
 
+#include "agent/act.h"
 #include "agent/json.h"
 #include "agent/observe.h"
 #include "city/finance.h"
+#include "city/view.h"
 #include "city/labor.h"
 #include "city/population.h"
 #include "city/ratings.h"
@@ -15,6 +17,7 @@
 #include "game/system.h"
 #include "game/tick.h"
 #include "game/time.h"
+#include "graphics/screenshot.h"
 #include "graphics/window.h"
 #include "scenario/criteria.h"
 #include "scenario/property.h"
@@ -333,6 +336,8 @@ static void cmd_load(json_writer *w, const char *name)
         json_int(w, "result", result);
         return;
     }
+    // Coordinates always refer to the same tiles; multi-tile placement depends on the view orientation
+    city_view_reset_orientation();
     window_city_show();
     game_state_pause();
     json_bool(w, "ok", 1);
@@ -357,6 +362,37 @@ static void cmd_close(json_writer *w)
     write_window(w);
 }
 
+static void cmd_screenshot(json_writer *w, const char *args)
+{
+    screenshot_type type = SCREENSHOT_FULL_CITY;
+    if (args && strcmp(args, "minimap") == 0) {
+        type = SCREENSHOT_MINIMAP;
+    } else if (args && strcmp(args, "display") == 0) {
+        type = SCREENSHOT_DISPLAY;
+    } else if (args && *args && strcmp(args, "city") != 0) {
+        write_error(w, "usage: screenshot [city|minimap|display]");
+        return;
+    }
+    if (!is_city_window()) {
+        write_error(w, "no city on screen");
+        write_window(w);
+        return;
+    }
+    graphics_save_screenshot(type);
+    json_bool(w, "ok", 1);
+    // The game names the file after the current time; the newest PNG in this directory is it
+    char directory[1024];
+    const char *location = dir_append_location("", PATH_LOCATION_SCREENSHOT);
+    if (location[0] == '/') {
+        snprintf(directory, sizeof(directory), "%s", location);
+    } else {
+        // Relative to the game data directory, which is the working directory
+        char cwd[768];
+        snprintf(directory, sizeof(directory), "%s/%s", getcwd(cwd, sizeof(cwd)) ? cwd : ".", location);
+    }
+    json_string(w, "directory", directory);
+}
+
 static void cmd_pause(json_writer *w, int pause)
 {
     if (pause) {
@@ -378,7 +414,11 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "map [x y w h] [terrain|desirability|water ...]");
     json_string(w, 0, "buildings [type]");
     json_string(w, 0, "houses [x y w h]");
+    json_string(w, 0, "build <type> <x> <y> [x2 y2]");
+    json_string(w, 0, "clear <x> <y> [x2 y2]");
+    json_string(w, 0, "undo");
     json_string(w, 0, "load <savegame>");
+    json_string(w, 0, "screenshot [city|minimap|display]");
     json_string(w, 0, "close");
     json_string(w, 0, "pause");
     json_string(w, 0, "resume");
@@ -421,8 +461,21 @@ static void execute(char *line)
         } else {
             agent_observe_houses(&w, args);
         }
+    } else if (strcmp(line, "build") == 0 || strcmp(line, "clear") == 0 || strcmp(line, "undo") == 0) {
+        if (!is_city_window()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else if (line[0] == 'b') {
+            agent_act_build(&w, args);
+        } else if (line[0] == 'c') {
+            agent_act_clear(&w, args);
+        } else {
+            agent_act_undo(&w);
+        }
     } else if (strcmp(line, "load") == 0) {
         cmd_load(&w, args);
+    } else if (strcmp(line, "screenshot") == 0) {
+        cmd_screenshot(&w, args);
     } else if (strcmp(line, "close") == 0) {
         cmd_close(&w);
     } else if (strcmp(line, "pause") == 0) {
