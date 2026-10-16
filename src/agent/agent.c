@@ -527,6 +527,7 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "open_route <city id>");
     json_string(w, 0, "depot <id> [<resource> <source id> <destination id> [always|never|source_over N|dest_under N]]");
     json_string(w, 0, "storage_report");
+    json_string(w, 0, "supply <market/temple/tavern id> [<resource>]");
     json_string(w, 0, "walker_preview <type> <x> <y>");
     json_string(w, 0, "layout_review [x y w h]");
     json_string(w, 0, "ratings");
@@ -658,12 +659,14 @@ static void execute(char *line)
         } else {
             agent_ratings_finance(&w);
         }
-    } else if (strcmp(line, "depot") == 0 || strcmp(line, "storage_report") == 0) {
+    } else if (strcmp(line, "depot") == 0 || strcmp(line, "storage_report") == 0 || strcmp(line, "supply") == 0) {
         if (!is_city_window()) {
             write_error(&w, "no city on screen");
             write_window(&w);
         } else if (line[0] == 'd') {
             agent_logistics_depot(&w, args);
+        } else if (strcmp(line, "supply") == 0) {
+            agent_logistics_supply(&w, args);
         } else {
             agent_logistics_storage_report(&w);
         }

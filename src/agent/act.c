@@ -9,11 +9,13 @@
 #include "city/view.h"
 #include "city/warning.h"
 #include "core/encoding.h"
+#include "figure/figure.h"
 #include "game/undo.h"
 #include "graphics/window.h"
 #include "map/building.h"
 #include "map/figure.h"
 #include "map/grid.h"
+#include "map/road_access.h"
 #include "map/terrain.h"
 #include "window/city.h"
 
@@ -127,7 +129,7 @@ static void write_blocked_tiles(json_writer *w, building_type type, int x, int y
     json_array_start(w, "blocked");
     for (int yy = y; yy < y + size; yy++) {
         for (int xx = x; xx < x + size; xx++) {
-            char what[24];
+            char what[128];
             if (!in_map(xx, yy)) {
                 snprintf(what, sizeof(what), "outside the map");
             } else {
@@ -136,7 +138,11 @@ static void write_blocked_tiles(json_writer *w, building_type type, int x, int y
                 if (c != '.' && c != ',') {
                     snprintf(what, sizeof(what), "tile '%c'", c);
                 } else if (map_has_figure_at(grid_offset)) {
-                    snprintf(what, sizeof(what), "person or animal");
+                    figure *f = figure_get(map_figure_at(grid_offset));
+                    snprintf(what, sizeof(what), "%s", f->type == FIGURE_MAP_FLAG ?
+                        "map flag (entry/exit/invasion/fishing point): permanent, build elsewhere" :
+                        figure_is_herd(f) ? "animal herd: it wanders off; retry later" :
+                        "a walker passing: retry next day");
                 } else {
                     continue;
                 }
@@ -192,8 +198,52 @@ static int buildings_in_rect(int x1, int y1, int x2, int y2, unsigned int *ids)
     return count;
 }
 
+#define MAX_ROAD_TILES 256
+
+/** Road tiles in the rectangle, as grid offsets (to report what a clear removed) */
+static int road_tiles_in_rect(int x1, int y1, int x2, int y2, int *offsets)
+{
+    int count = 0;
+    for (int y = y1 < y2 ? y1 : y2; y <= (y1 < y2 ? y2 : y1); y++) {
+        for (int x = x1 < x2 ? x1 : x2; x <= (x1 < x2 ? x2 : x1); x++) {
+            if (in_map(x, y) && count < MAX_ROAD_TILES && map_terrain_is(map_grid_offset(x, y), TERRAIN_ROAD)) {
+                offsets[count++] = map_grid_offset(x, y);
+            }
+        }
+    }
+    return count;
+}
+
+/** Buildings next to the rectangle that touch a road now (a clear may take their only road away) */
+static int buildings_with_road_near(int x1, int y1, int x2, int y2, unsigned int *ids)
+{
+    int min_x = (x1 < x2 ? x1 : x2) - 1, max_x = (x1 > x2 ? x1 : x2) + 1;
+    int min_y = (y1 < y2 ? y1 : y2) - 1, max_y = (y1 > y2 ? y1 : y2) + 1;
+    int count = 0;
+    for (int id = 1; id < building_count() && count < MAX_TRACKED; id++) {
+        building *b = building_get(id);
+        if (b->state != BUILDING_STATE_IN_USE || building_main(b) != b || building_properties_for_type(b->type)->shared ||
+            b->type == BUILDING_ROADBLOCK) {
+            continue;
+        }
+        int size = b->size > 0 ? b->size : 1;
+        if (b->x > max_x || b->x + size - 1 < min_x || b->y > max_y || b->y + size - 1 < min_y) {
+            continue;
+        }
+        map_point road;
+        if (map_has_road_access(b->x, b->y, size, &road)) {
+            ids[count++] = b->id;
+        }
+    }
+    return count;
+}
+
 static void construct(json_writer *w, building_type type, int x, int y, int x2, int y2)
 {
+    int road_before[MAX_ROAD_TILES];
+    int num_roads_before = type == BUILDING_CLEAR_LAND ? road_tiles_in_rect(x, y, x2, y2, road_before) : 0;
+    unsigned int roaded_ids[MAX_TRACKED];
+    int num_roaded = num_roads_before ? buildings_with_road_near(x, y, x2, y2, roaded_ids) : 0;
     unsigned int before_ids[MAX_TRACKED];
     building_type before_types[MAX_TRACKED];
     int before_x[MAX_TRACKED], before_y[MAX_TRACKED];
@@ -252,6 +302,32 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
             }
         }
         json_array_end(w);
+    }
+    if (num_roads_before) {
+        int removed_roads = 0;
+        for (int i = 0; i < num_roads_before; i++) {
+            removed_roads += !map_terrain_is(road_before[i], TERRAIN_ROAD);
+        }
+        if (removed_roads) {
+            json_int(w, "removed_road_tiles", removed_roads);
+            json_array_start(w, "lost_road_access");
+            for (int i = 0; i < num_roaded; i++) {
+                building *b = building_get(roaded_ids[i]);
+                map_point road;
+                if (b->state == BUILDING_STATE_IN_USE && !map_has_road_access(b->x, b->y, b->size, &road)) {
+                    json_object_start(w, 0);
+                    json_int(w, "id", b->id);
+                    json_string(w, "type", agent_building_type_name(b->type));
+                    json_int(w, "x", b->x);
+                    json_int(w, "y", b->y);
+                    json_object_end(w);
+                }
+            }
+            json_array_end(w);
+            json_string(w, "road_note", "the clear removed road tiles: buildings in lost_road_access get no workers, "
+                "carts or walkers until a road touches them again; others may now be cut off from the city (check "
+                "storage_report and the labour numbers)");
+        }
     }
     int tile_cost = model_get_building(type)->cost;
     if (changed && tile_cost > 0 && (type == BUILDING_ROAD || type == BUILDING_AQUEDUCT || type == BUILDING_WALL)) {

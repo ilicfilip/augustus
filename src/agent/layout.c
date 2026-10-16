@@ -2,6 +2,7 @@
 
 #include "agent/observe.h"
 #include "building/building.h"
+#include "building/industry.h"
 #include "building/roadblock.h"
 #include "core/config.h"
 #include "figure/roamer_preview.h"
@@ -146,6 +147,19 @@ static void write_missed_houses(json_writer *w, int x, int y, int w_tiles, int h
     }
 }
 
+/** Workplaces whose only roaming walker is the labour seeker (as figure/roamer_preview.c maps them) */
+static int sends_only_labour_seeker(building_type type)
+{
+    return building_is_farm(type) || building_is_raw_resource_producer(type) || building_is_workshop(type) ||
+        type == BUILDING_WAREHOUSE || type == BUILDING_GRANARY || type == BUILDING_DOCK ||
+        type == BUILDING_WHARF || type == BUILDING_SHIPYARD || type == BUILDING_WORKCAMP ||
+        type == BUILDING_BARRACKS || type == BUILDING_MILITARY_ACADEMY || type == BUILDING_TOWER ||
+        type == BUILDING_ACTOR_COLONY || type == BUILDING_GLADIATOR_SCHOOL || type == BUILDING_LION_HOUSE ||
+        type == BUILDING_CHARIOT_MAKER || type == BUILDING_MESS_HALL || type == BUILDING_CARAVANSERAI ||
+        type == BUILDING_LIGHTHOUSE || type == BUILDING_ARMOURY || type == BUILDING_ARCHITECT_GUILD ||
+        type == BUILDING_CITY_MINT;
+}
+
 void agent_layout_walker_preview(json_writer *w, const char *args)
 {
     char name[48];
@@ -200,8 +214,21 @@ void agent_layout_walker_preview(json_writer *w, const char *args)
     json_array_end(w);
     // Houses around it: served or not
     int rx = x - 15 < 0 ? 0 : x - 15, ry = y - 15 < 0 ? 0 : y - 15;
-    write_missed_houses(w, rx, ry, 31, 31, 0);
-    json_string(w, "houses_scope", "houses within 15 tiles; 'missed' = this building's walkers don't pass them");
+    if (sends_only_labour_seeker(type)) {
+        int passed = 0;
+        for (int id = 1; id < building_count(); id++) {
+            building *b = building_get(id);
+            passed += is_listed_house(b) && house_is_covered(b);
+        }
+        json_string(w, "walker", "labor_seeker");
+        json_int(w, "houses_passed", passed);
+        json_string(w, "labour", passed ? "its labour seeker passes houses: it can find workers (if the city has "
+            "unemployed people, or global labour is on)" : "its labour seeker passes NO house: no workers — put a "
+            "few houses on its road or link the road to a housing block");
+    } else {
+        write_missed_houses(w, rx, ry, 31, 31, 0);
+        json_string(w, "houses_scope", "houses within 15 tiles; 'missed' = this building's walkers don't pass them");
+    }
     figure_roamer_preview_reset_building_types();
 }
 
