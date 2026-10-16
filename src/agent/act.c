@@ -123,8 +123,49 @@ static int cancel_popup(void)
     return 0;
 }
 
+#define MAX_TRACKED 64
+
+/** Main buildings with a tile in the rectangle (to report what a clear destroyed) */
+static int buildings_in_rect(int x1, int y1, int x2, int y2, unsigned int *ids)
+{
+    int count = 0;
+    for (int y = y1 < y2 ? y1 : y2; y <= (y1 < y2 ? y2 : y1); y++) {
+        for (int x = x1 < x2 ? x1 : x2; x <= (x1 < x2 ? x2 : x1); x++) {
+            if (!in_map(x, y)) {
+                continue;
+            }
+            unsigned int id = map_building_at(map_grid_offset(x, y));
+            if (!id) {
+                continue;
+            }
+            building *b = building_main(building_get(id));
+            if (building_properties_for_type(b->type)->shared) {
+                continue; // aqueduct segments: shown as tiles, not buildings
+            }
+            int known = 0;
+            for (int i = 0; i < count; i++) {
+                known |= ids[i] == b->id;
+            }
+            if (!known && count < MAX_TRACKED) {
+                ids[count++] = b->id;
+            }
+        }
+    }
+    return count;
+}
+
 static void construct(json_writer *w, building_type type, int x, int y, int x2, int y2)
 {
+    unsigned int before_ids[MAX_TRACKED];
+    building_type before_types[MAX_TRACKED];
+    int before_x[MAX_TRACKED], before_y[MAX_TRACKED];
+    int num_before = type == BUILDING_CLEAR_LAND ? buildings_in_rect(x, y, x2, y2, before_ids) : 0;
+    for (int i = 0; i < num_before; i++) {
+        building *b = building_get(before_ids[i]);
+        before_types[i] = b->type;
+        before_x[i] = b->x;
+        before_y[i] = b->y;
+    }
     int treasury_before = city_finance_treasury();
     unsigned int map_before = map_fingerprint();
     // Junctions around a new road (routing may wander, so look at a margin around the drag)
@@ -156,6 +197,21 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
     }
     json_int(w, "cost", cost);
     json_int(w, "treasury", city_finance_treasury());
+    if (num_before) {
+        // Clearing a rectangle demolishes every building touching it, including ones the agent built itself
+        json_array_start(w, "removed");
+        for (int i = 0; i < num_before; i++) {
+            building *b = building_get(before_ids[i]);
+            if (b->state != BUILDING_STATE_IN_USE && b->state != BUILDING_STATE_CREATED) {
+                json_object_start(w, 0);
+                json_string(w, "type", agent_building_type_name(before_types[i]));
+                json_int(w, "x", before_x[i]);
+                json_int(w, "y", before_y[i]);
+                json_object_end(w);
+            }
+        }
+        json_array_end(w);
+    }
     int tile_cost = model_get_building(type)->cost;
     if (changed && tile_cost > 0 && (type == BUILDING_ROAD || type == BUILDING_AQUEDUCT || type == BUILDING_WALL)) {
         // Like the mouse drag, these are routed around obstacles (trees, rocks, buildings): report detours
