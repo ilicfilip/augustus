@@ -667,7 +667,10 @@ void agent_observe_buildings(json_writer *w, const char *args)
             json_string(w, "output", agent_resource_name(b->output_resource_id));
             json_int(w, "progress_percent", calc_bound(calc_percentage(b->data.industry.progress,
                 building_industry_get_max_progress(b)), 0, 100));
-            json_int(w, "efficiency", building_get_efficiency(b));
+            int efficiency = building_get_efficiency(b); // -1: under a month old or mothballed
+            if (efficiency >= 0) {
+                json_int(w, "efficiency", efficiency);
+            }
             json_int(w, "average_per_month", b->data.industry.average_production_per_month);
             if (building_is_workshop(b->type)) {
                 json_bool(w, "has_raw_materials", building_industry_has_raw_materials_for_production(b));

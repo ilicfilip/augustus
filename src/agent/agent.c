@@ -5,6 +5,7 @@
 #include "agent/observe.h"
 #include "agent/rome.h"
 #include "agent/settings.h"
+#include "agent/trade.h"
 #include "city/finance.h"
 #include "city/view.h"
 #include "city/labor.h"
@@ -483,6 +484,8 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "market <id> [<resource> <on|off>]");
     json_string(w, 0, "roadblock <id> [<walker> <on|off>]");
     json_string(w, 0, "message");
+    json_string(w, 0, "trade [<resource> <import|export|stockpile|mothball> <on|off> | <import_up_to|export_over> <0-100>]");
+    json_string(w, 0, "open_route <city id>");
     json_string(w, 0, "rome");
     json_string(w, 0, "salary <rank 0-10>");
     json_string(w, 0, "gift <modest|generous|lavish>");
@@ -584,6 +587,15 @@ static void execute(char *line)
             agent_rome_festival(&w, args);
         } else {
             agent_rome_dispatch(&w, args);
+        }
+    } else if (strcmp(line, "trade") == 0 || strcmp(line, "open_route") == 0) {
+        if (!is_city_window()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else if (line[0] == 't') {
+            agent_trade(&w, args);
+        } else {
+            agent_trade_open_route(&w, args);
         }
     } else if (strcmp(line, "message") == 0) {
         agent_settings_message(&w);

@@ -831,6 +831,7 @@ set(AGENT_FILES
     ${PROJECT_SOURCE_DIR}/src/agent/observe.c
     ${PROJECT_SOURCE_DIR}/src/agent/rome.c
     ${PROJECT_SOURCE_DIR}/src/agent/settings.c
+    ${PROJECT_SOURCE_DIR}/src/agent/trade.c
 )
 
 set(SOURCE_FILES
