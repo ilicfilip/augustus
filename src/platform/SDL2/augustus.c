@@ -153,7 +153,7 @@ static void platform_per_frame_callback(void)
 static void run_and_draw(void)
 {
     time_millis time_before_run = system_get_ticks();
-    time_set_millis(time_before_run);
+    time_set_millis(time_before_run + agent_time_offset());
 
     game_run();
     game_draw();

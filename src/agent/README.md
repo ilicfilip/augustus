@@ -21,12 +21,18 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 | `buildings [type]` | all non-house buildings (or only `type`, which may also be a house level): `id`, `type`, `x`, `y`, `size`, `workers`/`workers_needed`, `road_access`, `fire_risk`/`damage_risk`, `stock` (granary: units, 100 = 1 load; warehouse: cartloads), flags |
 | `houses [x y w h]` | per house: `level`, `x`, `y`, `size`, `population`, `room`, `desirability`, `happiness`, water (`fountain`, `well`), `foods`, `stock`, `access` (service counters, 0 = none), `evolve_id` + `evolve` (the house window's "why it won't evolve" sentence), `worst_desirability_building` |
 | `step [days=1]` | `days_requested`, `ticks_run`, `date`; `stopped_by: "window_changed"` + `window` if a popup/screen opened mid-step |
-| `load <savegame>` | `scenario`, `date` — loads from the savegame directory, shows the city, pauses |
+| `load <savegame>` | `scenario`, `date` — loads from the savegame directory (or an absolute path), shows the city, pauses |
 | `close` | closes a message dialog / message list / building info window and returns to the city |
 | `pause` / `resume` | `paused` |
 | `help` | `commands` |
 
 `step` stops early whenever the city stops being the active window (e.g. a news message pops up).
+It gives every simulated tick its own millisecond on the game clock (house evolution and some caches
+skip work "already done this millisecond"), and the main loop adds `agent_time_offset()` so the game
+clock stays monotonic afterwards.
+
+Runs are **not fully reproducible**: Augustus seeds some gameplay randomness from the wall clock
+(`random_from_stdlib` in `core/random.c`: entertainer venues, crime, strikes, requests, invasions).
 Typical loop: `step N` → if `stopped_by`, inspect, `close`, step the remaining days.
 
 Coordinates are map tiles (0..map_width-1, 0..map_height-1), the same in all commands. A building's

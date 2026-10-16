@@ -9,6 +9,7 @@
 #include "city/resource.h"
 #include "core/dir.h"
 #include "core/log.h"
+#include "core/time.h"
 #include "game/file.h"
 #include "game/state.h"
 #include "game/system.h"
@@ -32,6 +33,11 @@ int agent_init(int port)
 }
 
 int agent_is_enabled(void)
+{
+    return 0;
+}
+
+unsigned long long agent_time_offset(void)
 {
     return 0;
 }
@@ -64,7 +70,13 @@ static struct {
     char input[INPUT_BUFFER_SIZE];
     int input_len;
     char output[OUTPUT_BUFFER_SIZE];
+    time_millis time_offset;
 } data = { -1, -1 };
+
+unsigned long long agent_time_offset(void)
+{
+    return data.time_offset;
+}
 
 static int set_non_blocking(int fd)
 {
@@ -277,7 +289,12 @@ static void cmd_step(json_writer *w, const char *args)
     int total_ticks = days * TICKS_PER_DAY;
     int ticks = 0;
     const char *stopped_by = 0;
+    time_millis now = time_get_millis();
     while (ticks < total_ticks) {
+        // One millisecond per tick: code like house evolution skips buildings already processed "this
+        // millisecond", so running many ticks at the same clock value would skip work
+        time_set_millis(++now);
+        data.time_offset++;
         game_tick_run();
         game_file_write_mission_saved_game();
         ticks++;
@@ -304,7 +321,8 @@ static void cmd_load(json_writer *w, const char *name)
         write_error(w, "usage: load <savegame name, e.g. Engineer.svx>");
         return;
     }
-    const char *filename = dir_get_file_at_location(name, PATH_LOCATION_SAVEGAME);
+    // An absolute path loads that file directly (used by tests); otherwise look in the savegame directory
+    const char *filename = name[0] == '/' ? name : dir_get_file_at_location(name, PATH_LOCATION_SAVEGAME);
     if (!filename) {
         write_error(w, "savegame not found");
         return;

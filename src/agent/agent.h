@@ -25,4 +25,11 @@ void agent_poll(void);
 
 void agent_shutdown(void);
 
+/**
+ * Milliseconds the agent has moved the game clock ahead of real time. `step` gives every simulated tick
+ * its own clock value (some simulation code caches or skips work "per millisecond"), so the main loop
+ * must add this to real time to keep the game clock monotonic.
+ */
+unsigned long long agent_time_offset(void);
+
 #endif // AGENT_AGENT_H
