@@ -310,6 +310,11 @@ void agent_act_build(json_writer *w, const char *args)
         write_error(w, "outside the map");
         return;
     }
+    if (type == BUILDING_DRAGGABLE_RESERVOIR) {
+        // The game's reservoir tool takes the centre tile of the 3x3; keep x,y = top-left like every other building
+        construct(w, type, x + 1, y + 1, x2 + 1, y2 + 1);
+        return;
+    }
     construct(w, type, x, y, x2, y2);
 }
 

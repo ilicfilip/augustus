@@ -187,6 +187,25 @@ void agent_logistics_storage_report(json_writer *w)
     }
     json_array_end(w);
 
+    // Workplaces whose labour seeker passes no house: no workers however many are unemployed (unless global labour)
+    json_array_start(w, "no_labour_access");
+    for (int id = 1; id < building_count(); id++) {
+        building *b = building_get(id);
+        if (b->state != BUILDING_STATE_IN_USE || building_main(b) != b || !model_get_building(b->type)->laborers ||
+            b->type == BUILDING_FOUNTAIN || b->type == BUILDING_LATRINES) {
+            continue;
+        }
+        if (b->houses_covered <= 0 && b->num_workers <= 0) {
+            json_object_start(w, 0);
+            json_int(w, "id", b->id);
+            json_string(w, "type", agent_building_type_name(b->type));
+            json_int(w, "x", b->x);
+            json_int(w, "y", b->y);
+            json_object_end(w);
+        }
+    }
+    json_array_end(w);
+
     json_array_start(w, "stuck_producers");
     for (int id = 1; id < building_count(); id++) {
         building *b = building_get(id);

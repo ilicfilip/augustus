@@ -5,6 +5,7 @@
 #include "agent/json.h"
 #include "agent/logistics.h"
 #include "agent/observe.h"
+#include "agent/ratings.h"
 #include "agent/rome.h"
 #include "agent/settings.h"
 #include "agent/trade.h"
@@ -13,6 +14,7 @@
 #include "city/labor.h"
 #include "city/population.h"
 #include "city/ratings.h"
+#include "city/data_private.h"
 #include "city/resource.h"
 #include "city/victory.h"
 #include "core/dir.h"
@@ -283,6 +285,10 @@ static void cmd_city(json_writer *w)
     json_object_start(w, "food");
     json_int(w, "stored", city_resource_food_stored());
     json_int(w, "needed_per_month", city_resource_food_needed());
+    json_int(w, "produced_last_month", city_data.resource.food_produced_last_month);
+    json_int(w, "eaten_last_month", city_data.resource.food_consumed_last_month);
+    json_string(w, "units", "food units, 100 = 1 cartload; percentage_produced = produced/eaten last month and "
+        "swings with harvests (farms deliver in batches) — compare produced vs eaten over a few months instead");
     json_int(w, "supply_months", city_resource_food_supply_months());
     json_int(w, "types_eaten", city_resource_food_types_eaten());
     json_int(w, "percentage_produced", city_resource_food_percentage_produced());
@@ -502,6 +508,8 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "open_route <city id>");
     json_string(w, 0, "depot <id> [<resource> <source id> <destination id> [always|never|source_over N|dest_under N]]");
     json_string(w, 0, "storage_report");
+    json_string(w, 0, "ratings");
+    json_string(w, 0, "finance");
     json_string(w, 0, "rome");
     json_string(w, 0, "salary <rank 0-10>");
     json_string(w, 0, "gift <modest|generous|lavish>");
@@ -610,6 +618,15 @@ static void execute(char *line)
             agent_rome_festival(&w, args);
         } else {
             agent_rome_dispatch(&w, args);
+        }
+    } else if (strcmp(line, "ratings") == 0 || strcmp(line, "finance") == 0) {
+        if (!is_city_window()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else if (line[0] == 'r') {
+            agent_ratings(&w);
+        } else {
+            agent_ratings_finance(&w);
         }
     } else if (strcmp(line, "depot") == 0 || strcmp(line, "storage_report") == 0) {
         if (!is_city_window()) {
