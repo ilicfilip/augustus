@@ -485,6 +485,7 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "market <id> [<resource> <on|off>]");
     json_string(w, 0, "roadblock <id> [<walker> <on|off>]");
     json_string(w, 0, "message");
+    json_string(w, 0, "briefing");
     json_string(w, 0, "trade [<resource> <import|export|stockpile|mothball> <on|off> | <import_up_to|export_over> <0-100>]");
     json_string(w, 0, "open_route <city id>");
     json_string(w, 0, "depot <id> [<resource> <source id> <destination id> [always|never|source_over N|dest_under N]]");
@@ -609,6 +610,8 @@ static void execute(char *line)
         } else {
             agent_trade_open_route(&w, args);
         }
+    } else if (strcmp(line, "briefing") == 0) {
+        agent_settings_briefing(&w);
     } else if (strcmp(line, "message") == 0) {
         agent_settings_message(&w);
     } else if (strcmp(line, "load") == 0) {

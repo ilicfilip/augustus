@@ -21,6 +21,9 @@ void agent_settings_roadblock(json_writer *w, const char *args);
 /** message - title and text of the open message popup */
 void agent_settings_message(json_writer *w);
 
+/** briefing - the mission briefing (goals and scripted rules) as plain text */
+void agent_settings_briefing(json_writer *w);
+
 /** save <name> - save the game; names must start with "agent_" (or be an absolute path) */
 void agent_settings_save(json_writer *w, const char *args);
 

@@ -40,6 +40,7 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 | `gift <modest\|generous\|lavish>` | gift to Caesar from personal savings → `cost`, `personal_savings`, `favor_change` |
 | `dispatch <request id>` | sends a request's goods/denarii if available → `state`, `treasury_change` |
 | `festival [<god> <small\|large\|grand>]` | gods (ceres, neptune, mercury, mars, venus): happiness, wrath/happy bolts, months since festival; `festival_costs`; or schedules a festival (cost paid now, held 2-4 months later; one at a time) |
+| `briefing` | the mission briefing as plain text: `title`, `subtitle`, `text`, `original_campaign`, `campaign_mission` (original campaign text, or the custom scenario's intro message) |
 | `message` | the open message popup: `type`, `urgent`, `year`, `month`, `param1/2` (shown beside the text by the game, e.g. request amounts), `title`, `subtitle`, `text` (plain text) |
 | `save <agent_name>` | saves `agent_name.svx` in the savegame directory (name must start with `agent_`, so the player's saves are never overwritten) or to an absolute path → `file` |
 | `screenshot [city\|minimap\|display]` | saves a PNG (default: whole city); `directory` = where; newest PNG there is it |

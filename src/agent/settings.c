@@ -10,8 +10,11 @@
 #include "core/dir.h"
 #include "core/encoding.h"
 #include "core/lang.h"
+#include "game/campaign.h"
 #include "game/file.h"
 #include "game/resource.h"
+#include "scenario/custom_messages.h"
+#include "scenario/property.h"
 #include "window/message_dialog.h"
 
 #include <stdio.h>
@@ -377,6 +380,41 @@ void agent_settings_message(json_writer *w)
         rich_text_to_plain(msg->content.text, text, sizeof(text));
         json_string(w, "text", text);
     }
+}
+
+void agent_settings_briefing(json_writer *w)
+{
+    // As window/mission_briefing.c get_briefing_texts()
+    const uint8_t *title = 0, *subtitle = 0, *content = 0;
+    if (game_campaign_is_original()) {
+        const lang_message *msg = lang_get_message(200 + scenario_campaign_mission());
+        title = msg->title.text;
+        subtitle = msg->subtitle.text;
+        content = msg->content.text;
+    } else if (scenario_intro_message()) {
+        custom_message_t *message = custom_messages_get(scenario_intro_message());
+        title = custom_messages_get_title(message);
+        subtitle = custom_messages_get_subtitle(message);
+        content = custom_messages_get_text(message);
+    }
+    if (!content || !*content) {
+        write_error(w, "this scenario has no briefing text");
+        return;
+    }
+    static char text[MAX_TEXT];
+    json_bool(w, "ok", 1);
+    json_bool(w, "original_campaign", game_campaign_is_original());
+    json_int(w, "campaign_mission", scenario_campaign_mission());
+    if (title && *title) {
+        rich_text_to_plain(title, text, sizeof(text));
+        json_string(w, "title", text);
+    }
+    if (subtitle && *subtitle) {
+        rich_text_to_plain(subtitle, text, sizeof(text));
+        json_string(w, "subtitle", text);
+    }
+    rich_text_to_plain(content, text, sizeof(text));
+    json_string(w, "text", text);
 }
 
 void agent_settings_save(json_writer *w, const char *args)
