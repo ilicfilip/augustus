@@ -769,6 +769,11 @@ void agent_observe_houses(json_writer *w, const char *args)
         json_int(w, "population", b->house_population);
         json_int(w, "room", b->house_population_room);
         json_int(w, "desirability", b->desirability);
+        // As building/house_evolution.c check_evolve_desirability(): evolves at >= evolve_at, devolves at <= devolve_at
+        const model_house *house_model = model_get_house(b->subtype.house_level);
+        json_int(w, "evolve_at_desirability", b->subtype.house_level >= HOUSE_LUXURY_PALACE ?
+            1000 : house_model->evolve_desirability);
+        json_int(w, "devolve_at_desirability", house_model->devolve_desirability);
         json_int(w, "happiness", b->sentiment.house_happiness);
         json_bool(w, "road_access", b->has_road_access);
         json_bool(w, "fountain", b->has_water_access);
@@ -815,6 +820,29 @@ void agent_observe_houses(json_writer *w, const char *args)
     json_int(w, "count", total);
 }
 
+/**
+ * How a building changes desirability around it, as map/desirability.c add_to_terrain() applies it: the value at
+ * distance 1, changing by step_size every `step` tiles, out to `range` (max 8) tiles.
+ */
+static void write_desirability_profile(json_writer *w, const model_building *model)
+{
+    if (!model->desirability_value) {
+        return;
+    }
+    int range = model->desirability_range > 8 ? 8 : model->desirability_range;
+    int value = model->desirability_value;
+    int within_step = 0;
+    json_array_start(w, "desirability_by_distance");
+    for (int distance = 1; distance <= range; distance++) {
+        json_int(w, 0, value);
+        if (++within_step >= model->desirability_step) {
+            value += model->desirability_step_size;
+            within_step = 0;
+        }
+    }
+    json_array_end(w);
+}
+
 void agent_observe_buildable(json_writer *w)
 {
     json_bool(w, "ok", 1);
@@ -852,6 +880,7 @@ void agent_observe_buildable(json_writer *w)
         if (laborers) {
             json_int(w, "workers", laborers);
         }
+        write_desirability_profile(w, model_get_building(type));
         json_object_end(w);
     }
     json_array_end(w);
