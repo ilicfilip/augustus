@@ -827,6 +827,7 @@ endif()
 set(AGENT_FILES
     ${PROJECT_SOURCE_DIR}/src/agent/agent.c
     ${PROJECT_SOURCE_DIR}/src/agent/json.c
+    ${PROJECT_SOURCE_DIR}/src/agent/observe.c
 )
 
 set(SOURCE_FILES

@@ -1,10 +1,12 @@
 #include "agent.h"
 
 #include "agent/json.h"
+#include "agent/observe.h"
 #include "city/finance.h"
 #include "city/labor.h"
 #include "city/population.h"
 #include "city/ratings.h"
+#include "city/resource.h"
 #include "core/dir.h"
 #include "core/log.h"
 #include "game/file.h"
@@ -54,7 +56,7 @@ void agent_shutdown(void)
 #define TICKS_PER_DAY 50
 #define MAX_STEP_DAYS 3840 // 20 years
 #define INPUT_BUFFER_SIZE 4096
-#define OUTPUT_BUFFER_SIZE 65536
+#define OUTPUT_BUFFER_SIZE (1024 * 1024)
 
 static struct {
     int listen_fd;
@@ -226,10 +228,18 @@ static void cmd_city(json_writer *w)
     json_object_end(w);
 
     json_object_start(w, "labour");
-    json_int(w, "workers_needed", city_labor_workers_needed());
+    json_int(w, "workers_short", city_labor_workers_needed());
     json_int(w, "workers_employed", city_labor_workers_employed());
     json_int(w, "unemployed", city_labor_workers_unemployed());
     json_int(w, "unemployment_percentage", city_labor_unemployment_percentage());
+    json_object_end(w);
+
+    json_object_start(w, "food");
+    json_int(w, "stored", city_resource_food_stored());
+    json_int(w, "needed_per_month", city_resource_food_needed());
+    json_int(w, "supply_months", city_resource_food_supply_months());
+    json_int(w, "types_eaten", city_resource_food_types_eaten());
+    json_int(w, "percentage_produced", city_resource_food_percentage_produced());
     json_object_end(w);
 
     json_object_start(w, "ratings");
@@ -347,6 +357,9 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "ping");
     json_string(w, 0, "city");
     json_string(w, 0, "step [days=1]");
+    json_string(w, 0, "map [x y w h] [terrain|desirability|water ...]");
+    json_string(w, 0, "buildings [type]");
+    json_string(w, 0, "houses [x y w h]");
     json_string(w, 0, "load <savegame>");
     json_string(w, 0, "close");
     json_string(w, 0, "pause");
@@ -379,6 +392,17 @@ static void execute(char *line)
         cmd_city(&w);
     } else if (strcmp(line, "step") == 0) {
         cmd_step(&w, args);
+    } else if (strcmp(line, "map") == 0 || strcmp(line, "buildings") == 0 || strcmp(line, "houses") == 0) {
+        if (!is_city_window()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else if (line[0] == 'm') {
+            agent_observe_map(&w, args);
+        } else if (line[0] == 'b') {
+            agent_observe_buildings(&w, args);
+        } else {
+            agent_observe_houses(&w, args);
+        }
     } else if (strcmp(line, "load") == 0) {
         cmd_load(&w, args);
     } else if (strcmp(line, "close") == 0) {

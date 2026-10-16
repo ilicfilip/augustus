@@ -16,7 +16,10 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 | Command | Reply fields |
 |---|---|
 | `ping` | `version`, `window` {id, name}, `in_city`, `paused` |
-| `city` | `scenario`, `date`, `paused`, `finance`, `population`, `labour`, `ratings`, `win_criteria` (enabled criteria only) |
+| `city` | `scenario`, `date`, `paused`, `finance`, `population`, `labour` (`workers_short` = unfilled jobs), `food` (stored, needed_per_month, supply_months, types_eaten, percentage_produced), `ratings`, `win_criteria` (enabled criteria only) |
+| `map [x y w h] [layer…]` | `map_width/height`, region, `entry`/`exit` points, `layers[]` each with `name`, `legend`, `rows` (one string per y, one char per tile). Layers: `terrain` (default; terrain + building letters), `desirability` (tens), `water` (fountain/reservoir range) |
+| `buildings [type]` | all non-house buildings (or only `type`, which may also be a house level): `id`, `type`, `x`, `y`, `size`, `workers`/`workers_needed`, `road_access`, `fire_risk`/`damage_risk`, `stock` (granary: units, 100 = 1 load; warehouse: cartloads), flags |
+| `houses [x y w h]` | per house: `level`, `x`, `y`, `size`, `population`, `room`, `desirability`, `happiness`, water (`fountain`, `well`), `foods`, `stock`, `access` (service counters, 0 = none), `evolve_id` + `evolve` (the house window's "why it won't evolve" sentence), `worst_desirability_building` |
 | `step [days=1]` | `days_requested`, `ticks_run`, `date`; `stopped_by: "window_changed"` + `window` if a popup/screen opened mid-step |
 | `load <savegame>` | `scenario`, `date` — loads from the savegame directory, shows the city, pauses |
 | `close` | closes a message dialog / message list / building info window and returns to the city |
@@ -25,6 +28,9 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 
 `step` stops early whenever the city stops being the active window (e.g. a news message pops up).
 Typical loop: `step N` → if `stopped_by`, inspect, `close`, step the remaining days.
+
+Coordinates are map tiles (0..map_width-1, 0..map_height-1), the same in all commands. A building's
+`x`,`y` is its top-left tile in that grid.
 
 ## Example
 
@@ -38,4 +44,5 @@ $ printf 'load Engineer.svx\nstep 30\ncity\n' | nc 127.0.0.1 7777
 ## Files
 
 - `agent.c` — socket handling and commands
+- `observe.c` — `map`, `buildings`, `houses`
 - `json.c` — minimal JSON writer (no external dependencies)
