@@ -995,3 +995,15 @@ void window_message_dialog_show_custom_message(int custom_message_id, int year, 
         init_window(custom_message_id, 1, window_editor_map_draw_all);
     }
 }
+
+const lang_message *window_message_dialog_current(int *year, int *month, int *param1, int *param2)
+{
+    if (!window_is(WINDOW_MESSAGE_DIALOG)) {
+        return 0;
+    }
+    *year = player_message.year;
+    *month = player_message.month;
+    *param1 = player_message.param1;
+    *param2 = player_message.param2;
+    return get_custom_or_standard_lang_message(data.text_id);
+}

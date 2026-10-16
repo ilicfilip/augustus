@@ -1,6 +1,8 @@
 #ifndef WINDOW_MESSAGE_DIALOG_H
 #define WINDOW_MESSAGE_DIALOG_H
 
+#include "core/lang.h"
+
 enum {
     MESSAGE_DIALOG_ABOUT = 0,
     MESSAGE_DIALOG_CUSTOM_MESSAGE = 1,
@@ -35,5 +37,10 @@ void window_message_dialog_show_city_message(int text_id, int year, int month,
                                              int param1, int param2, int advisor, int use_popup);
 
 void window_message_dialog_show_custom_message(int custom_message_id, int year, int month);
+
+/**
+ * For the agent interface: the message currently shown (0 if the dialog isn't open) and its date/parameters.
+ */
+const lang_message *window_message_dialog_current(int *year, int *month, int *param1, int *param2);
 
 #endif // WINDOW_MESSAGE_DIALOG_H

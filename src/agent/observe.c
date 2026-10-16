@@ -111,6 +111,36 @@ const char *agent_building_type_name(int type)
     return name;
 }
 
+const char *agent_resource_name(int resource)
+{
+    // Resource names can be alias lists too ("timber|wood"); use the first
+    static char name[32];
+    const char *attr = resource_get_data(resource)->xml_attr_name;
+    size_t len = strcspn(attr, "|");
+    if (len >= sizeof(name)) {
+        len = sizeof(name) - 1;
+    }
+    memcpy(name, attr, len);
+    name[len] = 0;
+    return name;
+}
+
+int agent_resource_from_name(const char *name)
+{
+    size_t len = strlen(name);
+    for (resource_type r = RESOURCE_MIN; r < RESOURCE_MAX; r++) {
+        const char *attr = resource_get_data(r)->xml_attr_name;
+        while (attr && *attr) {
+            size_t alias_len = strcspn(attr, "|");
+            if (alias_len == len && strncmp(attr, name, len) == 0) {
+                return r;
+            }
+            attr = attr[alias_len] ? attr + alias_len + 1 : 0;
+        }
+    }
+    return RESOURCE_NONE;
+}
+
 int agent_building_type_from_name(const char *name)
 {
     if (strcmp(name, "housing") == 0 || strcmp(name, "vacant_lot") == 0) {
@@ -535,7 +565,7 @@ static void write_stock(json_writer *w, building *b)
                 json_object_start(w, "stock");
                 any = 1;
             }
-            json_int(w, resource_get_data(r)->xml_attr_name, amounts[r]);
+            json_int(w, agent_resource_name(r), amounts[r]);
         }
     }
     if (any) {

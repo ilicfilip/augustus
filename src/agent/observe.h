@@ -18,6 +18,12 @@ const char *agent_building_type_name(int type);
 /** Building type for a name accepted by `build`, or BUILDING_NONE (0) */
 int agent_building_type_from_name(const char *name);
 
+/** Machine-readable resource name, e.g. "timber" (static buffer) */
+const char *agent_resource_name(int resource);
+
+/** Resource for a name or alias, or RESOURCE_NONE (0) */
+int agent_resource_from_name(const char *name);
+
 /** The `terrain` map layer character for a tile */
 char agent_tile_char(int grid_offset);
 

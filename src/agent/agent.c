@@ -3,12 +3,14 @@
 #include "agent/act.h"
 #include "agent/json.h"
 #include "agent/observe.h"
+#include "agent/settings.h"
 #include "city/finance.h"
 #include "city/view.h"
 #include "city/labor.h"
 #include "city/population.h"
 #include "city/ratings.h"
 #include "city/resource.h"
+#include "city/victory.h"
 #include "core/dir.h"
 #include "core/log.h"
 #include "core/time.h"
@@ -226,6 +228,8 @@ static void cmd_city(json_writer *w)
     json_game_string(w, "scenario", scenario_name());
     write_date(w);
     json_bool(w, "paused", game_state_is_paused());
+    int victory = city_victory_state();
+    json_string(w, "victory", victory == VICTORY_STATE_WON ? "won" : victory == VICTORY_STATE_LOST ? "lost" : "none");
 
     json_object_start(w, "finance");
     json_int(w, "treasury", city_finance_treasury());
@@ -248,6 +252,7 @@ static void cmd_city(json_writer *w)
     json_int(w, "unemployed", city_labor_workers_unemployed());
     json_int(w, "unemployment_percentage", city_labor_unemployment_percentage());
     json_object_end(w);
+    agent_settings_write_labour_categories(w);
 
     json_object_start(w, "food");
     json_int(w, "stored", city_resource_food_stored());
@@ -417,6 +422,12 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "build <type> <x> <y> [x2 y2]");
     json_string(w, 0, "clear <x> <y> [x2 y2]");
     json_string(w, 0, "undo");
+    json_string(w, 0, "set tax <0-25> | set wages <0-100> | set priority <category> <0-9>");
+    json_string(w, 0, "storage <id> [<resource> <accept|get|refuse|keep> [4-32] | permission <name> <on|off>]");
+    json_string(w, 0, "market <id> [<resource> <on|off>]");
+    json_string(w, 0, "roadblock <id> [<walker> <on|off>]");
+    json_string(w, 0, "message");
+    json_string(w, 0, "save <agent_name>");
     json_string(w, 0, "load <savegame>");
     json_string(w, 0, "screenshot [city|minimap|display]");
     json_string(w, 0, "close");
@@ -472,6 +483,24 @@ static void execute(char *line)
         } else {
             agent_act_undo(&w);
         }
+    } else if (strcmp(line, "set") == 0 || strcmp(line, "storage") == 0 || strcmp(line, "market") == 0 ||
+        strcmp(line, "roadblock") == 0 || strcmp(line, "save") == 0) {
+        if (!is_city_window()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else if (strcmp(line, "set") == 0) {
+            agent_settings_set(&w, args);
+        } else if (strcmp(line, "storage") == 0) {
+            agent_settings_storage(&w, args);
+        } else if (strcmp(line, "market") == 0) {
+            agent_settings_market(&w, args);
+        } else if (strcmp(line, "roadblock") == 0) {
+            agent_settings_roadblock(&w, args);
+        } else {
+            agent_settings_save(&w, args);
+        }
+    } else if (strcmp(line, "message") == 0) {
+        agent_settings_message(&w);
     } else if (strcmp(line, "load") == 0) {
         cmd_load(&w, args);
     } else if (strcmp(line, "screenshot") == 0) {

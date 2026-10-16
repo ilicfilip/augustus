@@ -16,13 +16,20 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 | Command | Reply fields |
 |---|---|
 | `ping` | `version`, `window` {id, name}, `in_city`, `paused` |
-| `city` | `scenario`, `date`, `paused`, `finance`, `population`, `labour` (`workers_short` = unfilled jobs), `food` (stored, needed_per_month, supply_months, types_eaten, percentage_produced), `ratings`, `win_criteria` (enabled criteria only) |
+| `city` | `scenario`, `date`, `paused`, `victory` (none/won/lost), `finance`, `population`, `labour` (`workers_short` = unfilled jobs), `food` (stored, needed_per_month, supply_months, types_eaten, percentage_produced), `ratings`, `win_criteria` (enabled criteria only), `labour_categories` (needed/allocated/priority) |
 | `map [x y w h] [layer…]` | `map_width/height`, region, `entry`/`exit` points, `layers[]` each with `name`, `legend`, `rows` (one string per y, one char per tile). Layers: `terrain` (default; terrain + building letters), `desirability` (tens), `water` (fountain/reservoir range) |
 | `buildings [type]` | all non-house buildings (or only `type`, which may also be a house level): `id`, `type`, `x`, `y`, `size`, `workers`/`workers_needed`, `road_access`, `fire_risk`/`damage_risk`, `stock` (granary: units, 100 = 1 load; warehouse: cartloads), flags |
 | `houses [x y w h]` | per house: `level`, `x`, `y`, `size`, `population`, `room`, `desirability`, `happiness`, water (`fountain`, `well`), `foods`, `stock`, `access` (service counters, 0 = none), `evolve_id` + `evolve` (the house window's "why it won't evolve" sentence), `worst_desirability_building` |
 | `build <type> <x> <y> [x2 y2]` | places like the UI does (same costs, rules, warnings). `type` = names from `buildings` (`housing` for housing plots); `x2 y2` drags roads, aqueducts, walls, highways, reservoirs, housing, plazas, gardens. Reply: `ok` (something changed), `cost`, `treasury`, `warnings` (the game's messages, e.g. "Must build on cleared land"), `at_target` (building there, or `tile` letter) |
 | `clear <x> <y> [x2 y2]` | clear land; same reply. Clearing forts, monuments or bridges needs a confirmation the agent cancels (error) |
 | `undo` | undo the last build/clear while the game allows (shortly after building): `refund`, `treasury` |
+| `set tax <0-25>` / `set wages <0-100>` / `set priority <category> <0-9>` | new values; priority replies with `labour_categories` (0 = no priority) |
+| `storage <id> [<resource> <accept\|get\|refuse\|keep> [4-32]]` | warehouse/granary orders (quantity in cartloads, steps of 4; `keep` = "retaining", only cart depots take from it) → `orders` (non-refused resources: "state quantity"), `permissions` |
+| `storage <id> permission <name> <on\|off>` | who may take goods: market, traders, dock, quartermaster, worker, barkeep, caravanserai, lighthouse, armoury, workcamp, natives, caesar |
+| `market <id> [<resource> <on\|off>]` | which goods a market (or other distributor) fetches → `fetches` |
+| `roadblock <id> [<walker> <on\|off>]` | which roaming walkers pass (maintenance, priest, market, entertainer, education, medicine, tax_collector, labor_seeker, missionary, watchman) → `lets_through`; new roadblocks block all |
+| `message` | the open message popup: `type`, `urgent`, `year`, `month`, `param1/2` (shown beside the text by the game, e.g. request amounts), `title`, `subtitle`, `text` (plain text) |
+| `save <agent_name>` | saves `agent_name.svx` in the savegame directory (name must start with `agent_`, so the player's saves are never overwritten) or to an absolute path → `file` |
 | `screenshot [city\|minimap\|display]` | saves a PNG (default: whole city); `directory` = where; newest PNG there is it |
 | `step [days=1]` | `days_requested`, `ticks_run`, `date`; `stopped_by: "window_changed"` + `window` if a popup/screen opened mid-step |
 | `load <savegame>` | `scenario`, `date` — loads from the savegame directory (or an absolute path), shows the city, pauses |
@@ -59,4 +66,11 @@ $ printf 'load Engineer.svx\nstep 30\ncity\n' | nc 127.0.0.1 7777
 - `agent.c` — socket handling and commands
 - `observe.c` — `map`, `buildings`, `houses`, building type names
 - `act.c` — `build`, `clear`, `undo`
+- `settings.c` — `set`, `storage`, `market`, `roadblock`, `message`, `save`
+
+Hooks outside `src/agent/`: `platform/SDL2/augustus.c` (poll, clock offset, shutdown), `platform/arguments.*`
+(`--agent-port`), `window/message_dialog.*` (`window_message_dialog_current()` read-only accessor), CMakeLists.
+
+Not handled yet: mission briefing (new mission start) and mission end screens — `step` stops with the
+`mission_end` window and `city.victory` says won/lost, but the agent can't continue to the next mission.
 - `json.c` — minimal JSON writer (no external dependencies)
