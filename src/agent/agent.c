@@ -3,6 +3,7 @@
 #include "agent/act.h"
 #include "agent/json.h"
 #include "agent/observe.h"
+#include "agent/rome.h"
 #include "agent/settings.h"
 #include "city/finance.h"
 #include "city/view.h"
@@ -479,6 +480,10 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "market <id> [<resource> <on|off>]");
     json_string(w, 0, "roadblock <id> [<walker> <on|off>]");
     json_string(w, 0, "message");
+    json_string(w, 0, "rome");
+    json_string(w, 0, "salary <rank 0-10>");
+    json_string(w, 0, "gift <modest|generous|lavish>");
+    json_string(w, 0, "dispatch <request id>");
     json_string(w, 0, "save <agent_name>");
     json_string(w, 0, "load <savegame>");
     json_string(w, 0, "screenshot [city|minimap|display]");
@@ -559,6 +564,20 @@ static void execute(char *line)
             agent_settings_roadblock(&w, args);
         } else {
             agent_settings_save(&w, args);
+        }
+    } else if (strcmp(line, "rome") == 0 || strcmp(line, "salary") == 0 || strcmp(line, "gift") == 0 ||
+        strcmp(line, "dispatch") == 0) {
+        if (!is_city_window()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else if (strcmp(line, "rome") == 0) {
+            agent_rome_status(&w);
+        } else if (strcmp(line, "salary") == 0) {
+            agent_rome_salary(&w, args);
+        } else if (strcmp(line, "gift") == 0) {
+            agent_rome_gift(&w, args);
+        } else {
+            agent_rome_dispatch(&w, args);
         }
     } else if (strcmp(line, "message") == 0) {
         agent_settings_message(&w);

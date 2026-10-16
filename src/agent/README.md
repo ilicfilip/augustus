@@ -29,6 +29,10 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 | `storage <id> permission <name> <on\|off>` | who may take goods: market, traders, dock, quartermaster, worker, barkeep, caravanserai, lighthouse, armoury, workcamp, natives, caesar |
 | `market <id> [<resource> <on\|off>]` | which goods a market (or other distributor) fetches → `fetches` |
 | `roadblock <id> [<walker> <on\|off>]` | which roaming walkers pass (maintenance, priest, market, entertainer, education, medicine, tax_collector, labor_seeker, missionary, watchman) → `lets_through`; new roadblocks block all |
+| `rome` | `favor`, `player_rank`/`salary_rank` {rank, title, salary}, `personal_savings`, `months_since_gift`, `gifts` [{size, cost, affordable}], `requests` [{id, resource, amount, state, months_left, favor, can_dispatch}] |
+| `salary <rank 0-10>` | sets the governor's salary like the advisor window; `above_rank` (paying above your rank costs favour) |
+| `gift <modest\|generous\|lavish>` | gift to Caesar from personal savings → `cost`, `personal_savings`, `favor_change` |
+| `dispatch <request id>` | sends a request's goods/denarii if available → `state`, `treasury_change` |
 | `message` | the open message popup: `type`, `urgent`, `year`, `month`, `param1/2` (shown beside the text by the game, e.g. request amounts), `title`, `subtitle`, `text` (plain text) |
 | `save <agent_name>` | saves `agent_name.svx` in the savegame directory (name must start with `agent_`, so the player's saves are never overwritten) or to an absolute path → `file` |
 | `screenshot [city\|minimap\|display]` | saves a PNG (default: whole city); `directory` = where; newest PNG there is it |
@@ -69,6 +73,7 @@ $ printf 'load Engineer.svx\nstep 30\ncity\n' | nc 127.0.0.1 7777
 - `observe.c` — `map`, `buildings`, `houses`, building type names
 - `act.c` — `build`, `clear`, `undo`
 - `settings.c` — `set`, `storage`, `market`, `roadblock`, `message`, `save`
+- `rome.c` — `rome`, `salary`, `gift`, `dispatch`
 
 Hooks outside `src/agent/`: `platform/SDL2/augustus.c` (poll, clock offset, shutdown after `game_exit`),
 `platform/arguments.*` (`--agent-port`), `window/message_dialog.*` (`window_message_dialog_current()`
