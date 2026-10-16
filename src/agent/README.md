@@ -33,6 +33,8 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 | `trade <resource> <import\|export\|stockpile\|mothball> <on\|off>` | import/export refused if no open route sells/buys it; turning export on un-stockpiles (game rule) |
 | `trade <resource> <import_up_to\|export_over> <0-100>` | thresholds in cartloads (0 = no limit / export everything) |
 | `open_route <city id>` | opens like the empire screen: checks treasury and `goods_to_open` in storage → `opened`, `cost` |
+| `storage_report` | `storage` [{id, type, x, y, staffing_percent, road_access, contents, stored, free_space, accepts}], `stuck_producers` [{id, type, x, y, waiting_with, reason}] — producers whose cart found no storage (game flag `min_max_seen`) |
+| `depot <id> [<resource> <source id> <destination id> [always\|never\|source_over N\|dest_under N]]` | show/set a cart depot's order (storages must differ; granaries food only; N 0-32 cartloads) → `order`, `carts`, `staffing_percent` |
 | `rome` | `favor`, `player_rank`/`salary_rank` {rank, title, salary}, `personal_savings`, `months_since_gift`, `gifts` [{size, cost, affordable}], `requests` [{id, resource, amount, state, months_left, favor, can_dispatch}] |
 | `salary <rank 0-10>` | sets the governor's salary like the advisor window; `above_rank` (paying above your rank costs favour) |
 | `gift <modest\|generous\|lavish>` | gift to Caesar from personal savings → `cost`, `personal_savings`, `favor_change` |
@@ -80,6 +82,7 @@ $ printf 'load Engineer.svx\nstep 30\ncity\n' | nc 127.0.0.1 7777
 - `settings.c` — `set`, `storage`, `market`, `roadblock`, `message`, `save`
 - `rome.c` — `rome`, `salary`, `gift`, `dispatch`, `festival`
 - `trade.c` — `trade`, `open_route`
+- `logistics.c` — `storage_report`, `depot`
 
 Hooks outside `src/agent/`: `platform/SDL2/augustus.c` (poll, clock offset, shutdown after `game_exit`),
 `platform/arguments.*` (`--agent-port`), `window/message_dialog.*` (`window_message_dialog_current()`

@@ -828,6 +828,7 @@ set(AGENT_FILES
     ${PROJECT_SOURCE_DIR}/src/agent/act.c
     ${PROJECT_SOURCE_DIR}/src/agent/agent.c
     ${PROJECT_SOURCE_DIR}/src/agent/json.c
+    ${PROJECT_SOURCE_DIR}/src/agent/logistics.c
     ${PROJECT_SOURCE_DIR}/src/agent/observe.c
     ${PROJECT_SOURCE_DIR}/src/agent/rome.c
     ${PROJECT_SOURCE_DIR}/src/agent/settings.c
