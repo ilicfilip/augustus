@@ -22,12 +22,13 @@
 #define MAX_WAGES 100
 #define MAX_TEXT 8192
 
-// Same order as the labor_category enum in city/labor.c (index 0 = none)
+// Same order as the labor_category enum in city/labor.c, without LABOR_CATEGORY_NONE. The game's labour
+// data and priority functions are 0-based (index = enum value - 1), as in the labour advisor.
 static const char *LABOUR_CATEGORIES[] = {
-    0, "industry_commerce", "food_production", "engineering", "water", "prefectures", "military",
+    "industry_commerce", "food_production", "engineering", "water", "prefectures", "military",
     "entertainment", "health_education", "governance_religion"
 };
-#define NUM_LABOUR_CATEGORIES 10
+#define NUM_LABOUR_CATEGORIES 9
 
 static const struct {
     const char *name;
@@ -86,7 +87,7 @@ static building *get_building(int id)
 void agent_settings_write_labour_categories(json_writer *w)
 {
     json_array_start(w, "labour_categories");
-    for (int i = 1; i < NUM_LABOUR_CATEGORIES; i++) {
+    for (int i = 0; i < NUM_LABOUR_CATEGORIES; i++) {
         const labor_category_data *data = city_labor_category(i);
         json_object_start(w, 0);
         json_string(w, "name", LABOUR_CATEGORIES[i]);
@@ -103,7 +104,7 @@ void agent_settings_set(json_writer *w, const char *args)
     char setting[32], category[32];
     int value;
     if (args && sscanf(args, "priority %31s %d", category, &value) == 2) {
-        for (int i = 1; i < NUM_LABOUR_CATEGORIES; i++) {
+        for (int i = 0; i < NUM_LABOUR_CATEGORIES; i++) {
             if (strcmp(LABOUR_CATEGORIES[i], category) == 0) {
                 int max = city_labor_max_selectable_priority(i);
                 if (value < 0 || value > max) {

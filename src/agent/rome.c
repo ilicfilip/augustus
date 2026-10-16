@@ -1,7 +1,10 @@
 #include "rome.h"
 
 #include "agent/observe.h"
+#include "city/constants.h"
 #include "city/emperor.h"
+#include "city/festival.h"
+#include "city/gods.h"
 #include "city/finance.h"
 #include "city/ratings.h"
 #include "city/victory.h"
@@ -165,4 +168,78 @@ void agent_rome_dispatch(json_writer *w, const char *args)
     json_bool(w, "ok", 1);
     json_string(w, "state", request_state_name(request->state));
     json_int(w, "treasury_change", city_finance_treasury() - treasury_before);
+}
+
+static const char *GOD_NAMES[] = { "ceres", "neptune", "mercury", "mars", "venus" };
+static const char *FESTIVAL_SIZES[] = { 0, "small", "large", "grand" };
+
+static void write_festival_status(json_writer *w)
+{
+    city_festival_calculate_costs();
+    json_array_start(w, "gods");
+    for (int god = GOD_CERES; god <= GOD_VENUS; god++) {
+        json_object_start(w, 0);
+        json_string(w, "god", GOD_NAMES[god]);
+        json_int(w, "happiness", city_god_happiness(god));
+        json_int(w, "wrath_bolts", city_god_wrath_bolts(god));
+        json_int(w, "happy_bolts", city_god_happy_bolts(god));
+        json_int(w, "months_since_festival", city_god_months_since_festival(god));
+        json_object_end(w);
+    }
+    json_array_end(w);
+    json_object_start(w, "festival_costs");
+    json_int(w, "small", city_festival_small_cost());
+    json_int(w, "large", city_festival_large_cost());
+    json_int(w, "grand", city_festival_grand_cost());
+    json_int(w, "grand_wine", city_festival_grand_wine());
+    json_bool(w, "enough_wine_for_grand", !city_festival_out_of_wine());
+    json_object_end(w);
+    json_bool(w, "festival_planned", city_festival_is_planned());
+    json_int(w, "months_since_last_festival", city_festival_months_since_last());
+}
+
+void agent_rome_festival(json_writer *w, const char *args)
+{
+    char god_name[16] = "", size_name[16] = "";
+    int n = args ? sscanf(args, "%15s %15s", god_name, size_name) : 0;
+    if (n <= 0) {
+        json_bool(w, "ok", 1);
+        write_festival_status(w);
+        return;
+    }
+    int god = -1, size = 0;
+    for (int i = GOD_CERES; i <= GOD_VENUS; i++) {
+        if (strcmp(god_name, GOD_NAMES[i]) == 0) {
+            god = i;
+        }
+    }
+    for (int i = FESTIVAL_SMALL; i <= FESTIVAL_GRAND; i++) {
+        if (strcmp(size_name, FESTIVAL_SIZES[i]) == 0) {
+            size = i;
+        }
+    }
+    if (n != 2 || god < 0 || !size) {
+        write_error(w, "usage: festival [<ceres|neptune|mercury|mars|venus> <small|large|grand>]");
+        return;
+    }
+    if (city_festival_is_planned()) {
+        write_error(w, "a festival is already planned");
+        return;
+    }
+    if (city_finance_out_of_money()) {
+        write_error(w, "the city is out of money");
+        return;
+    }
+    // As the hold-festival window does
+    city_festival_calculate_costs();
+    city_festival_select_god(god);
+    if (!city_festival_select_size(size)) {
+        write_error(w, "not enough wine in warehouses for a grand festival");
+        return;
+    }
+    int treasury_before = city_finance_treasury();
+    city_festival_schedule();
+    json_bool(w, "ok", 1);
+    json_int(w, "cost", treasury_before - city_finance_treasury());
+    write_festival_status(w);
 }

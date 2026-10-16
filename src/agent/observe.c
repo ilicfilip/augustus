@@ -2,7 +2,9 @@
 
 #include "building/building.h"
 #include "building/house_evolution.h"
+#include "building/count.h"
 #include "building/menu.h"
+#include "building/monument.h"
 #include "building/properties.h"
 #include "core/encoding.h"
 #include "core/lang.h"
@@ -171,6 +173,18 @@ static char building_char(building_type type)
         return 'H';
     }
     switch (type) {
+        // Augustus models these as buildings; give them their terrain letters
+        case BUILDING_AQUEDUCT:
+            return 'a';
+        case BUILDING_ROAD:
+        case BUILDING_LOW_BRIDGE:
+        case BUILDING_SHIP_BRIDGE:
+            return '=';
+        case BUILDING_HIGHWAY:
+            return '%';
+        case BUILDING_WALL:
+        case BUILDING_PALISADE:
+            return '#';
         case BUILDING_FOUNTAIN:
             return 'F';
         case BUILDING_WELL:
@@ -535,6 +549,9 @@ static int is_listable(const building *b)
     if (b->prev_part_building_id || b->type == BUILDING_WAREHOUSE_SPACE) {
         return 0; // only list the main part of multi-part buildings
     }
+    if (building_properties_for_type(b->type)->shared) {
+        return 0; // one building record for all tiles of e.g. aqueducts, placed at 0,0: not a real position
+    }
     return 1;
 }
 
@@ -620,7 +637,25 @@ void agent_observe_buildings(json_writer *w, const char *args)
         if (b->has_plague) {
             json_bool(w, "plague", 1);
         }
-        write_stock(w, b);
+        if (building_monument_is_unfinished_monument(b)) {
+            // Monuments (incl. oracles, large temples, colosseum...) are built in phases from materials that
+            // work camp workers deliver from warehouses; they don't work until finished
+            json_object_start(w, "construction");
+            json_int(w, "phase", b->monument.phase);
+            json_int(w, "phases", building_monument_phases(b->type));
+            json_bool(w, "halted", building_monument_is_construction_halted(b));
+            json_object_start(w, "materials_still_needed");
+            for (resource_type r = RESOURCE_MIN; r < RESOURCE_MAX; r++) {
+                if (b->resources[r] > 0) {
+                    json_int(w, agent_resource_name(r), b->resources[r]);
+                }
+            }
+            json_object_end(w);
+            json_int(w, "workcamps", building_count_active(BUILDING_WORKCAMP));
+            json_object_end(w);
+        } else {
+            write_stock(w, b);
+        }
         json_object_end(w);
     }
     json_array_end(w);

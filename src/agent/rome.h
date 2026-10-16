@@ -15,4 +15,7 @@ void agent_rome_gift(json_writer *w, const char *args);
 /** dispatch <request id> - send the goods/money Caesar asked for */
 void agent_rome_dispatch(json_writer *w, const char *args);
 
+/** festival [<god> <small|large|grand>] - gods' moods and festival costs, or schedule a festival */
+void agent_rome_festival(json_writer *w, const char *args);
+
 #endif // AGENT_ROME_H

@@ -244,6 +244,9 @@ static void cmd_city(json_writer *w)
     int victory = city_victory_state();
     json_string(w, "victory", victory == VICTORY_STATE_WON ? "won" : victory == VICTORY_STATE_LOST ? "lost" : "none");
 
+    // As opening an advisor does; otherwise these only refresh at year end
+    city_finance_estimate_taxes();
+    city_finance_estimate_wages();
     json_object_start(w, "finance");
     json_int(w, "treasury", city_finance_treasury());
     json_int(w, "tax_percentage", city_finance_tax_percentage());
@@ -484,6 +487,7 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "salary <rank 0-10>");
     json_string(w, 0, "gift <modest|generous|lavish>");
     json_string(w, 0, "dispatch <request id>");
+    json_string(w, 0, "festival [<god> <small|large|grand>]");
     json_string(w, 0, "save <agent_name>");
     json_string(w, 0, "load <savegame>");
     json_string(w, 0, "screenshot [city|minimap|display]");
@@ -566,7 +570,7 @@ static void execute(char *line)
             agent_settings_save(&w, args);
         }
     } else if (strcmp(line, "rome") == 0 || strcmp(line, "salary") == 0 || strcmp(line, "gift") == 0 ||
-        strcmp(line, "dispatch") == 0) {
+        strcmp(line, "dispatch") == 0 || strcmp(line, "festival") == 0) {
         if (!is_city_window()) {
             write_error(&w, "no city on screen");
             write_window(&w);
@@ -576,6 +580,8 @@ static void execute(char *line)
             agent_rome_salary(&w, args);
         } else if (strcmp(line, "gift") == 0) {
             agent_rome_gift(&w, args);
+        } else if (strcmp(line, "festival") == 0) {
+            agent_rome_festival(&w, args);
         } else {
             agent_rome_dispatch(&w, args);
         }
