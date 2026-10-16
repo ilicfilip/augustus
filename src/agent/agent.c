@@ -304,7 +304,6 @@ static void cmd_step(json_writer *w, const char *args)
         time_set_millis(++now);
         data.time_offset++;
         game_tick_run();
-        game_file_write_mission_saved_game();
         ticks++;
         if (!is_city_window()) {
             // A popup or another screen appeared: let the caller decide what to do

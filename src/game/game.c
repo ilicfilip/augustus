@@ -1,5 +1,7 @@
 #include "game.h"
 
+#include "agent/agent.h"
+
 #include "assets/assets.h"
 #include "building/monument.h"
 #include "building/properties.h"
@@ -258,7 +260,10 @@ void game_display_fps(int fps)
 void game_exit(void)
 {
     video_shutdown();
-    settings_save();
-    config_save();
+    // An agent-controlled game (--agent-port, often with --windowed) must not change the player's settings
+    if (!agent_is_enabled()) {
+        settings_save();
+        config_save();
+    }
     sound_system_shutdown();
 }

@@ -69,8 +69,15 @@ $ printf 'load Engineer.svx\nstep 30\ncity\n' | nc 127.0.0.1 7777
 - `act.c` — `build`, `clear`, `undo`
 - `settings.c` — `set`, `storage`, `market`, `roadblock`, `message`, `save`
 
-Hooks outside `src/agent/`: `platform/SDL2/augustus.c` (poll, clock offset, shutdown), `platform/arguments.*`
-(`--agent-port`), `window/message_dialog.*` (`window_message_dialog_current()` read-only accessor), CMakeLists.
+Hooks outside `src/agent/`: `platform/SDL2/augustus.c` (poll, clock offset, shutdown after `game_exit`),
+`platform/arguments.*` (`--agent-port`), `window/message_dialog.*` (`window_message_dialog_current()`
+read-only accessor), `game/game.c` (no settings/config saving in agent mode), `game/file.c` (no mission-start
+autosave in agent mode — it is named after the player's rank and would overwrite e.g. `Architect.svx`),
+CMakeLists.
+
+Agent mode never writes the player's files: settings (`c3.inf`, `augustus.ini`) aren't saved on exit (so
+`--windowed` doesn't become the player's display setting), there is no mission-start autosave, and `save`
+only accepts `agent_*` names. `build` moves the camera to what was built, for anyone watching.
 
 Not handled yet: mission briefing (new mission start) and mission end screens — `step` stops with the
 `mission_end` window and `city.victory` says won/lost, but the agent can't continue to the next mission.

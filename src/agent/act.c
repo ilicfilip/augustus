@@ -6,6 +6,7 @@
 #include "building/menu.h"
 #include "building/properties.h"
 #include "city/finance.h"
+#include "city/view.h"
 #include "city/warning.h"
 #include "core/encoding.h"
 #include "game/undo.h"
@@ -118,6 +119,10 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
     int cost = treasury_before - city_finance_treasury();
     int changed = cost != 0 || map_fingerprint() != map_before;
 
+    if (changed) {
+        // Let someone watching the game window see what the agent just did
+        city_view_go_to_grid_offset(map_grid_offset(x, y));
+    }
     json_bool(w, "ok", changed);
     if (needed_confirmation) {
         json_string(w, "error", "needs confirmation (fort, monument or bridge); cancelled");

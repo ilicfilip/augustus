@@ -393,8 +393,8 @@ static void handle_event(SDL_Event *event)
 static void teardown(void)
 {
     SDL_Log("Exiting game");
+    game_exit(); // before agent_shutdown: game_exit skips saving settings while the agent server is enabled
     agent_shutdown();
-    game_exit();
     platform_screen_destroy();
     platform_log_teardown();
     SDL_Quit();

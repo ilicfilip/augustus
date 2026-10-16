@@ -1,3 +1,4 @@
+#include "agent/agent.h"
 #include "file.h"
 
 #include "building/construction.h"
@@ -576,6 +577,10 @@ int game_file_delete_saved_game(const char *filename)
 
 void game_file_write_mission_saved_game(void)
 {
+    // Agent-controlled games never write into the player's save folder under the player's save names
+    if (agent_is_enabled()) {
+        return;
+    }
     if (!city_mission_should_save_start() || !game_campaign_is_active()) {
         return;
     }
