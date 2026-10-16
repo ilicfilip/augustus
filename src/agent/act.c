@@ -93,6 +93,26 @@ static void write_tile(json_writer *w, int x, int y)
     json_object_end(w);
 }
 
+static int is_road(int x, int y)
+{
+    return in_map(x, y) && map_terrain_is(map_grid_offset(x, y), TERRAIN_ROAD);
+}
+
+/** Road tiles in the rectangle with 3+ road neighbours: junctions where roaming walkers pick a random way */
+static int count_junctions(int x1, int y1, int x2, int y2)
+{
+    int count = 0;
+    for (int y = y1; y <= y2; y++) {
+        for (int x = x1; x <= x2; x++) {
+            if (is_road(x, y) &&
+                is_road(x - 1, y) + is_road(x + 1, y) + is_road(x, y - 1) + is_road(x, y + 1) >= 3) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
 /** If the construction opened a confirmation popup (deleting forts, monuments, bridges), cancel it */
 static int cancel_popup(void)
 {
@@ -107,6 +127,10 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
 {
     int treasury_before = city_finance_treasury();
     unsigned int map_before = map_fingerprint();
+    // Junctions around a new road (routing may wander, so look at a margin around the drag)
+    int jx1 = (x < x2 ? x : x2) - 3, jy1 = (y < y2 ? y : y2) - 3;
+    int jx2 = (x > x2 ? x : x2) + 3, jy2 = (y > y2 ? y : y2) + 3;
+    int junctions_before = type == BUILDING_ROAD ? count_junctions(jx1, jy1, jx2, jy2) : 0;
     city_warning_clear_all();
 
     building_construction_set_type(type, 0);
@@ -139,6 +163,15 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
         int straight = (x2 > x ? x2 - x : x - x2) + (y2 > y ? y2 - y : y - y2) + 1;
         json_int(w, "tiles", tiles);
         json_int(w, "straight_tiles", straight);
+        if (type == BUILDING_ROAD) {
+            int new_junctions = count_junctions(jx1, jy1, jx2, jy2) - junctions_before;
+            if (new_junctions > 0) {
+                json_int(w, "new_intersections", new_junctions);
+                json_string(w, "intersection_note", "every intersection makes roaming walkers (prefects, engineers, "
+                    "priests, tax collectors, market ladies) choose randomly; never run a road right next to "
+                    "another (double roads make a ladder of junctions); use single roads + roadblocks");
+            }
+        }
         if (tiles > straight) {
             json_bool(w, "detour", 1);
             json_string(w, "note", "routed around obstacles; for a straight line clear trees/rubble on the direct "
