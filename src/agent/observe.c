@@ -2,6 +2,7 @@
 
 #include "building/building.h"
 #include "building/house_evolution.h"
+#include "building/menu.h"
 #include "building/properties.h"
 #include "core/encoding.h"
 #include "core/lang.h"
@@ -706,4 +707,46 @@ void agent_observe_houses(json_writer *w, const char *args)
     }
     json_array_end(w);
     json_int(w, "count", total);
+}
+
+void agent_observe_buildable(json_writer *w)
+{
+    json_bool(w, "ok", 1);
+    json_array_start(w, "buildable");
+    for (int type = BUILDING_NONE + 1; type < BUILDING_TYPE_MAX; type++) {
+        if (is_menu_group(type) || (is_house(type) && type != BUILDING_HOUSE_VACANT_LOT) ||
+            type == BUILDING_RESERVOIR || type == BUILDING_CLEAR_LAND || type == BUILDING_REPAIR_LAND ||
+            !building_menu_is_enabled(type)) {
+            continue; // BUILDING_RESERVOIR is placed through the draggable reservoir; clearing has its own command
+        }
+        const char *name = type == BUILDING_HOUSE_VACANT_LOT ? "housing" : agent_building_type_name(type);
+        if (!name || strncmp(name, "type_", 5) == 0) {
+            continue;
+        }
+        // Use the name that `build` resolves back to this type (e.g. paths share a first alias with trees)
+        char alias[48];
+        if (type != BUILDING_HOUSE_VACANT_LOT && agent_building_type_from_name(name) != type) {
+            int found = 0;
+            for (int i = 1; get_alias(type, i, alias, sizeof(alias)); i++) {
+                if (agent_building_type_from_name(alias) == type) {
+                    name = alias;
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                continue;
+            }
+        }
+        json_object_start(w, 0);
+        json_string(w, "type", name);
+        json_int(w, "cost", model_get_building(type)->cost);
+        json_int(w, "size", type == BUILDING_WAREHOUSE ? 3 : building_properties_for_type(type)->size);
+        int laborers = model_get_building(type)->laborers;
+        if (laborers) {
+            json_int(w, "workers", laborers);
+        }
+        json_object_end(w);
+    }
+    json_array_end(w);
 }
