@@ -12,6 +12,7 @@
 #include "game/undo.h"
 #include "graphics/window.h"
 #include "map/building.h"
+#include "map/figure.h"
 #include "map/grid.h"
 #include "map/terrain.h"
 #include "window/city.h"
@@ -113,6 +114,43 @@ static int count_junctions(int x1, int y1, int x2, int y2)
     return count;
 }
 
+/**
+ * After a failed single-building placement: which footprint tiles are not buildable and why (map letter, or a
+ * person/animal standing there) — the game's warning only says "Must build on cleared land".
+ */
+static void write_blocked_tiles(json_writer *w, building_type type, int x, int y)
+{
+    int size = type == BUILDING_WAREHOUSE ? 3 : building_properties_for_type(type)->size;
+    if (size < 1) {
+        size = 1;
+    }
+    json_array_start(w, "blocked");
+    for (int yy = y; yy < y + size; yy++) {
+        for (int xx = x; xx < x + size; xx++) {
+            char what[24];
+            if (!in_map(xx, yy)) {
+                snprintf(what, sizeof(what), "outside the map");
+            } else {
+                int grid_offset = map_grid_offset(xx, yy);
+                char c = agent_tile_char(grid_offset);
+                if (c != '.' && c != ',') {
+                    snprintf(what, sizeof(what), "tile '%c'", c);
+                } else if (map_has_figure_at(grid_offset)) {
+                    snprintf(what, sizeof(what), "person or animal");
+                } else {
+                    continue;
+                }
+            }
+            json_object_start(w, 0);
+            json_int(w, "x", xx);
+            json_int(w, "y", yy);
+            json_string(w, "by", what);
+            json_object_end(w);
+        }
+    }
+    json_array_end(w);
+}
+
 /** If the construction opened a confirmation popup (deleting forts, monuments, bridges), cancel it */
 static int cancel_popup(void)
 {
@@ -194,6 +232,9 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
     } else if (!changed) {
         json_string(w, "error", type == BUILDING_CLEAR_LAND ? "nothing to clear there (already clear, or rock/water)" :
             "nothing was built; see warnings");
+        if (!is_drag_type(type)) {
+            write_blocked_tiles(w, type, x, y);
+        }
     }
     json_int(w, "cost", cost);
     json_int(w, "treasury", city_finance_treasury());
