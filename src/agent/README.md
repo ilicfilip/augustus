@@ -34,6 +34,8 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 | `trade <resource> <import\|export\|stockpile\|mothball> <on\|off>` | import/export refused if no open route sells/buys it; turning export on un-stockpiles (game rule) |
 | `trade <resource> <import_up_to\|export_over> <0-100>` | thresholds in cartloads (0 = no limit / export everything) |
 | `open_route <city id>` | opens like the empire screen: checks treasury and `goods_to_open` in storage → `opened`, `cost` |
+| `walker_preview <type> <x> <y>` | simulates a roaming-service building's walkers at x,y (existing or planned) with the game's roamer preview (figure/roamer_preview.c): `route_tiles`, `rows` (* = walked road, @ = building), `missed_houses` / `missed` / `houses` within 15 tiles |
+| `layout_review [x y w h]` | per service (prefect, engineer, religion, market, tax_collector, bathhouse, barber, doctor, school, library): `buildings`, `houses`, `missed`, `missed_area`, `missed_houses`; `leaks` (junctions next to houses with a suggested roadblock tile); `roadblocks_blocking_services` (roadblocks near houses and the services they block). A walker serves buildings within 2 tiles of its route. The preview display option is switched on in memory only |
 | `ratings` | `culture` {rating, parts [{part, coverage_percent, points, max_points, next_step_at_coverage, points_at_next_step}], monuments_counted}, `prosperity` {rating, cap_from_housing, yearly_factors_now {…}, percent_in_tents_shacks, percent_in_villas_palaces}, `peace` {rating, calm_years_in_a_row, next_yearly_gain_if_calm, this_year_so_far}, `favor` {rating, penalties, months_since_gift} — mirrors city/ratings.c |
 | `finance` | `treasury`, `this_year` / `last_year` {income {taxes, exports, donated, total}, expenses {imports, wages, construction, interest, salary, sundries, tribute, levies, total}, net} |
 | `storage_report` | `storage` [{id, type, x, y, staffing_percent, road_access, contents, stored, free_space, accepts}], `stuck_producers` [{id, type, x, y, waiting_with, reason}], `no_labour_access` [{id, type, x, y}] (workplaces whose labour seeker passes no house) — producers whose cart found no storage (game flag `min_max_seen`) |
@@ -87,6 +89,8 @@ $ printf 'load Engineer.svx\nstep 30\ncity\n' | nc 127.0.0.1 7777
 - `observe.c` — `map`, `buildings`, `houses`, building type names
 - `act.c` — `build`, `clear`, `undo`
 - `settings.c` — `set`, `storage`, `market`, `roadblock`, `message`, `save`
+- `layout.c` — `walker_preview`, `layout_review`
+- `ratings.c` — `ratings`, `finance`
 - `rome.c` — `rome`, `salary`, `gift`, `dispatch`, `festival`
 - `trade.c` — `trade`, `open_route`
 - `campaign.c` — `victory`, `next_mission`, `test_win`

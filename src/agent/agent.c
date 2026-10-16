@@ -3,6 +3,7 @@
 #include "agent/act.h"
 #include "agent/campaign.h"
 #include "agent/json.h"
+#include "agent/layout.h"
 #include "agent/logistics.h"
 #include "agent/observe.h"
 #include "agent/ratings.h"
@@ -508,6 +509,8 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "open_route <city id>");
     json_string(w, 0, "depot <id> [<resource> <source id> <destination id> [always|never|source_over N|dest_under N]]");
     json_string(w, 0, "storage_report");
+    json_string(w, 0, "walker_preview <type> <x> <y>");
+    json_string(w, 0, "layout_review [x y w h]");
     json_string(w, 0, "ratings");
     json_string(w, 0, "finance");
     json_string(w, 0, "rome");
@@ -618,6 +621,15 @@ static void execute(char *line)
             agent_rome_festival(&w, args);
         } else {
             agent_rome_dispatch(&w, args);
+        }
+    } else if (strcmp(line, "walker_preview") == 0 || strcmp(line, "layout_review") == 0) {
+        if (!is_city_window()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else if (line[0] == 'w') {
+            agent_layout_walker_preview(&w, args);
+        } else {
+            agent_layout_review(&w, args);
         }
     } else if (strcmp(line, "ratings") == 0 || strcmp(line, "finance") == 0) {
         if (!is_city_window()) {
