@@ -74,6 +74,7 @@ int platform_parse_arguments(int argc, char **argv, augustus_args *output_args)
     output_args->use_software_cursor = 0;
     output_args->force_fullscreen = 0;
     output_args->display_id = 0;
+    output_args->agent_port = 0;
 
     for (int i = 1; i < argc; i++) {
         // we ignore "-psn" arguments, this is needed to launch the app
@@ -118,6 +119,14 @@ int platform_parse_arguments(int argc, char **argv, augustus_args *output_args)
                 print_log(DISPLAY_ID_ERROR_MESSAGE);
                 ok = 0;
             }
+        } else if (strcmp(argv[i], "--agent-port") == 0) {
+            if (i + 1 < argc) {
+                output_args->agent_port = strtol(argv[i + 1], 0, 10);
+                i++;
+            } else {
+                print_log("Option --agent-port must be followed by a port number");
+                ok = 0;
+            }
         } else if (strcmp(argv[i], "--windowed") == 0) {
             output_args->force_windowed = 1;
         } else if (strcmp(argv[i], "--asset-previewer") == 0) {
@@ -159,6 +168,8 @@ int platform_parse_arguments(int argc, char **argv, augustus_args *output_args)
         print_log("          Forces the game to start fullscreen");
         print_log("--display ID");
         print_log("          Forces the game to start on the specified display, numbered from 0");
+        print_log("--agent-port PORT");
+        print_log("          Starts the agent control server on 127.0.0.1:PORT");
         print_log("--asset-previewer");
         print_log("          Runs the extra asset previewer instead of the game");
         print_log("--enable-joysticks");

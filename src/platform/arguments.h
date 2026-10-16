@@ -11,6 +11,7 @@ typedef struct {
     int use_software_cursor;
     int force_fullscreen;
     int display_id;
+    int agent_port;
 } augustus_args;
 
 int platform_parse_arguments(int argc, char **argv, augustus_args *output_args);

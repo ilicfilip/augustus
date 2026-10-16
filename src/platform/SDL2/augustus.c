@@ -1,5 +1,6 @@
 #include "SDL.h"
 
+#include "agent/agent.h"
 #include "core/config.h"
 #include "core/encoding.h"
 #include "core/file.h"
@@ -392,6 +393,7 @@ static void handle_event(SDL_Event *event)
 static void teardown(void)
 {
     SDL_Log("Exiting game");
+    agent_shutdown();
     game_exit();
     platform_screen_destroy();
     platform_log_teardown();
@@ -425,8 +427,12 @@ static void main_loop(void)
 #endif
         return;
     }
+    agent_poll();
     if (data.active) {
         run_and_draw();
+    } else if (agent_is_enabled()) {
+        // Keep serving agent commands while the window is hidden
+        SDL_WaitEventTimeout(NULL, 10);
     } else {
         SDL_WaitEvent(NULL);
     }
@@ -706,7 +712,9 @@ int main(int argc, char **argv)
 
     setup(&args);
 
-
+    if (args.agent_port > 0) {
+        agent_init(args.agent_port);
+    }
 
     mouse_set_inside_window(1);
     mouse_set_window_focus(1);

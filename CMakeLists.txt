@@ -824,6 +824,11 @@ if(${TARGET_PLATFORM} STREQUAL "emscripten")
     set(EMSCRIPTEN_FILES ${PROJECT_SOURCE_DIR}/res/shell.html)
 endif()
 
+set(AGENT_FILES
+    ${PROJECT_SOURCE_DIR}/src/agent/agent.c
+    ${PROJECT_SOURCE_DIR}/src/agent/json.c
+)
+
 set(SOURCE_FILES
     ${PLATFORM_FILES}
     ${CORE_FILES}
@@ -843,6 +848,7 @@ set(SOURCE_FILES
     ${WINDOW_FILES}
     ${EDITOR_FILES}
     ${TRANSLATION_FILES}
+    ${AGENT_FILES}
     ${TINYFD_FILES}
     ${SPNG_FILES}
     ${SXML_FILES}
