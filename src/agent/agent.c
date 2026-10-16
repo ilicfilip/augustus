@@ -243,6 +243,9 @@ static void cmd_city(json_writer *w)
     json_game_string(w, "scenario", scenario_name());
     write_date(w);
     json_bool(w, "paused", game_state_is_paused());
+    static const char *DIFFICULTIES[] = { "very_easy", "easy", "normal", "hard", "very_hard" };
+    int difficulty = setting_difficulty();
+    json_string(w, "difficulty", difficulty >= 0 && difficulty <= 4 ? DIFFICULTIES[difficulty] : "unknown");
     int victory = city_victory_state();
     json_string(w, "victory", victory == VICTORY_STATE_WON ? "won" : victory == VICTORY_STATE_LOST ? "lost" : "none");
 
