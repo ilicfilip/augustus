@@ -911,10 +911,16 @@ void agent_observe_risks(json_writer *w, const char *args)
     }
     json_array_end(w);
     int burning = 0;
+    json_array_start(w, "burning");
     for (building *b = building_first_of_type(BUILDING_BURNING_RUIN); b; b = b->next_of_type) {
         if (b->state == BUILDING_STATE_IN_USE) {
             burning++;
+            json_object_start(w, 0);
+            json_int(w, "x", b->x);
+            json_int(w, "y", b->y);
+            json_object_end(w);
         }
     }
+    json_array_end(w);
     json_int(w, "burning_now", burning);
 }
