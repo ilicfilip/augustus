@@ -30,6 +30,9 @@ const char *agent_resource_name(int resource);
 /** Resource for a name or alias, or RESOURCE_NONE (0) */
 int agent_resource_from_name(const char *name);
 
+/** 2 = within a filled reservoir's range, 1 = only within range of reservoirs without water yet, 0 = none */
+int agent_reservoir_reach(int x, int y, int size);
+
 /** The `terrain` map layer character for a tile */
 char agent_tile_char(int grid_offset);
 

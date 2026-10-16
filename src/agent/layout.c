@@ -323,6 +323,31 @@ void agent_layout_review(json_writer *w, const char *args)
     json_string(w, "leaks_note", "junctions next to houses: roamers choose randomly there. A roadblock on the branch "
         "that leads away from the houses keeps them on the block — then allow the services that need to pass");
 
+    // Water buildings that can't work: outside every reservoir's range, or without workers
+    json_array_start(w, "dry_water_buildings");
+    static const building_type WATER_TYPES[] = { BUILDING_FOUNTAIN, BUILDING_BATHHOUSE };
+    for (int t = 0; t < 2; t++) {
+        for (building *b = building_first_of_type(WATER_TYPES[t]); b; b = b->next_of_type) {
+            if (b->state != BUILDING_STATE_IN_USE || !in_rect(b, x, y, w_tiles, h_tiles)) {
+                continue;
+            }
+            int reach = agent_reservoir_reach(b->x, b->y, b->size);
+            int in_range = reach == 2;
+            if (in_range && b->num_workers > 0) {
+                continue;
+            }
+            json_object_start(w, 0);
+            json_int(w, "id", b->id);
+            json_string(w, "type", agent_building_type_name(b->type));
+            json_int(w, "x", b->x);
+            json_int(w, "y", b->y);
+            json_string(w, "why", reach == 0 ? "outside every reservoir's range" :
+                reach == 1 ? "its reservoir has no water" : "no workers");
+            json_object_end(w);
+        }
+    }
+    json_array_end(w);
+
     // Roadblocks next to housing that stop services the houses need
     static const struct {
         const char *walker;

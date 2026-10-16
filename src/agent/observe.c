@@ -16,6 +16,7 @@
 #include "map/desirability.h"
 #include "map/grid.h"
 #include "map/terrain.h"
+#include "map/water_supply.h"
 #include "scenario/map.h"
 #include "translation/translation.h"
 
@@ -952,4 +953,25 @@ void agent_observe_risks(json_writer *w, const char *args)
     }
     json_array_end(w);
     json_int(w, "burning_now", burning);
+}
+
+int agent_reservoir_reach(int x, int y, int size)
+{
+    // As map/water_supply.c marks reservoir ranges: radius around the 3x3 reservoir, only once it has water
+    int radius = map_water_supply_reservoir_radius();
+    int best = 0;
+    for (building *b = building_first_of_type(BUILDING_RESERVOIR); b; b = b->next_of_type) {
+        if (b->state != BUILDING_STATE_IN_USE && b->state != BUILDING_STATE_CREATED) {
+            continue;
+        }
+        int reach = x + size - 1 >= b->x - radius && x <= b->x + 2 + radius &&
+            y + size - 1 >= b->y - radius && y <= b->y + 2 + radius;
+        if (reach) {
+            best = b->has_water_access ? 2 : (best > 1 ? best : 1);
+        }
+        if (best == 2) {
+            break;
+        }
+    }
+    return best;
 }

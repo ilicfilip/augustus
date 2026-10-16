@@ -275,6 +275,16 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
                 "path first (clear), rocks and water can't be cleared");
         }
     }
+    if (changed && (type == BUILDING_FOUNTAIN || type == BUILDING_BATHHOUSE)) {
+        // The game's "needs access to a full reservoir" warning also appears while a reservoir merely isn't full
+        // yet, so say whether the building is within any reservoir's range at all
+        int reach = agent_reservoir_reach(x, y, type == BUILDING_BATHHOUSE ? 2 : 1);
+        json_string(w, "water", reach == 2 ? "inside a filled reservoir's range: works once staffed" :
+            reach == 1 ? "inside the range of a reservoir with NO water yet: it needs open water within 1 tile or an "
+                "aqueduct from a full reservoir" :
+            "OUTSIDE every reservoir's range: this will stay dry — move it, build a reservoir (+aqueduct) within "
+            "reach, or use wells/latrines instead");
+    }
     write_warnings(w);
     write_tile(w, x, y);
     window_invalidate();
