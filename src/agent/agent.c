@@ -1,6 +1,7 @@
 #include "agent.h"
 
 #include "agent/act.h"
+#include "agent/campaign.h"
 #include "agent/json.h"
 #include "agent/logistics.h"
 #include "agent/observe.h"
@@ -189,6 +190,10 @@ static const char *window_name(void)
         case WINDOW_BUILDING_INFO: return "building_info";
         case WINDOW_MISSION_END: return "mission_end";
         case WINDOW_MISSION_BRIEFING: return "mission_briefing";
+        case WINDOW_MISSION_SELECTION: return "mission_selection";
+        case WINDOW_VICTORY_DIALOG: return "victory_dialog";
+        case WINDOW_VIDEO: return "video";
+        case WINDOW_INTERMEZZO: return "intermezzo";
         default: return is_city_window() ? "city" : "other";
     }
 }
@@ -402,6 +407,7 @@ static void cmd_load(json_writer *w, const char *name)
     }
     // Coordinates always refer to the same tiles; multi-tile placement depends on the view orientation
     city_view_reset_orientation();
+    city_victory_reset(); // the victory state isn't part of the save; don't carry it over from the last city
     window_city_show();
     game_state_pause();
     json_bool(w, "ok", 1);
@@ -489,6 +495,8 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "roadblock <id> [<walker> <on|off>]");
     json_string(w, 0, "message");
     json_string(w, 0, "briefing");
+    json_string(w, 0, "victory <accept|continue_2|continue_5>");
+    json_string(w, 0, "next_mission [choice]");
     json_string(w, 0, "trade [<resource> <import|export|stockpile|mothball> <on|off> | <import_up_to|export_over> <0-100>]");
     json_string(w, 0, "open_route <city id>");
     json_string(w, 0, "depot <id> [<resource> <source id> <destination id> [always|never|source_over N|dest_under N]]");
@@ -613,6 +621,12 @@ static void execute(char *line)
         } else {
             agent_trade_open_route(&w, args);
         }
+    } else if (strcmp(line, "victory") == 0) {
+        agent_campaign_victory(&w, args);
+    } else if (strcmp(line, "next_mission") == 0) {
+        agent_campaign_next_mission(&w, args);
+    } else if (strcmp(line, "test_win") == 0) {
+        agent_campaign_test_win(&w);
     } else if (strcmp(line, "briefing") == 0) {
         agent_settings_briefing(&w);
     } else if (strcmp(line, "message") == 0) {

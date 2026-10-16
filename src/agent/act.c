@@ -127,7 +127,8 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
     if (needed_confirmation) {
         json_string(w, "error", "needs confirmation (fort, monument or bridge); cancelled");
     } else if (!changed) {
-        json_string(w, "error", "nothing was built; see warnings");
+        json_string(w, "error", type == BUILDING_CLEAR_LAND ? "nothing to clear there (already clear, or rock/water)" :
+            "nothing was built; see warnings");
     }
     json_int(w, "cost", cost);
     json_int(w, "treasury", city_finance_treasury());

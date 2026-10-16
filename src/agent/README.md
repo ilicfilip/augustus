@@ -40,6 +40,9 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 | `gift <modest\|generous\|lavish>` | gift to Caesar from personal savings → `cost`, `personal_savings`, `favor_change` |
 | `dispatch <request id>` | sends a request's goods/denarii if available → `state`, `treasury_change` |
 | `festival [<god> <small\|large\|grand>]` | gods (ceres, neptune, mercury, mars, venus): happiness, wrath/happy bolts, months since festival; `festival_costs`; or schedules a festival (cost paid now, held 2-4 months later; one at a time) |
+| `victory <accept\|continue_2\|continue_5>` | answers the "mission won" dialog (window `victory_dialog`, appears when all goals are met): accept the promotion, or govern 24/60 more months |
+| `next_mission [choice]` | after accepting (windows `video`/`intermezzo`/`mission_end`): advances the campaign like the end screen; if the next mission offers two maps returns `choice_needed` + `choices` [{choice, name, description}] and shows the selection screen; with a choice (or when there's only one map) loads and starts it like the briefing's start button → `scenario`, `campaign_mission`; `campaign_complete` after the last mission |
+| `test_win` | forces a win — only exists when the game runs with `AUGUSTUS_AGENT_TEST_MODE=1` (the test suite) |
 | `briefing` | the mission briefing as plain text: `title`, `subtitle`, `text`, `original_campaign`, `campaign_mission` (original campaign text, or the custom scenario's intro message) |
 | `message` | the open message popup: `type`, `urgent`, `year`, `month`, `param1/2` (shown beside the text by the game, e.g. request amounts), `title`, `subtitle`, `text` (plain text) |
 | `save <agent_name>` | saves `agent_name.svx` in the savegame directory (name must start with `agent_`, so the player's saves are never overwritten) or to an absolute path → `file` |
@@ -83,6 +86,7 @@ $ printf 'load Engineer.svx\nstep 30\ncity\n' | nc 127.0.0.1 7777
 - `settings.c` — `set`, `storage`, `market`, `roadblock`, `message`, `save`
 - `rome.c` — `rome`, `salary`, `gift`, `dispatch`, `festival`
 - `trade.c` — `trade`, `open_route`
+- `campaign.c` — `victory`, `next_mission`, `test_win`
 - `logistics.c` — `storage_report`, `depot`
 
 Hooks outside `src/agent/`: `platform/SDL2/augustus.c` (poll, clock offset, shutdown after `game_exit`),
