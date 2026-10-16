@@ -33,6 +33,7 @@ Lets an external program (e.g. an MCP server driving an AI agent) observe and co
 | `save <agent_name>` | saves `agent_name.svx` in the savegame directory (name must start with `agent_`, so the player's saves are never overwritten) or to an absolute path → `file` |
 | `screenshot [city\|minimap\|display]` | saves a PNG (default: whole city); `directory` = where; newest PNG there is it |
 | `step [days=1]` | `days_requested`, `ticks_run`, `date`; `stopped_by: "window_changed"` + `window` if a popup/screen opened mid-step |
+| `play <days> [speed]` | runs the game **in real time** through the normal game loop at `speed` % (10-100 step 10, 200, 300, 500; default 100 ≈ 0.8 s/day) so a person can watch; answers only when done (same fields as `step`) or when a popup opens (`stopped_by`). Commands sent meanwhile are queued. Pauses again afterwards |
 | `load <savegame>` | `scenario`, `date` — loads from the savegame directory (or an absolute path), shows the city, pauses |
 | `close` | closes a message dialog / message list / building info window and returns to the city |
 | `pause` / `resume` | `paused` |

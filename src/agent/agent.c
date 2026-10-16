@@ -15,6 +15,7 @@
 #include "core/log.h"
 #include "core/time.h"
 #include "game/file.h"
+#include "game/settings.h"
 #include "game/state.h"
 #include "game/system.h"
 #include "game/tick.h"
@@ -76,6 +77,13 @@ static struct {
     int input_len;
     char output[OUTPUT_BUFFER_SIZE];
     time_millis time_offset;
+    int reply_deferred; // set by a command that answers later (play)
+    struct {
+        int active;
+        int days;
+        int start_ticks;
+        int target_ticks;
+    } play;
 } data = { -1, -1 };
 
 unsigned long long agent_time_offset(void)
@@ -122,6 +130,10 @@ int agent_is_enabled(void)
 
 static void close_client(void)
 {
+    if (data.play.active) {
+        game_state_pause();
+        data.play.active = 0;
+    }
     if (data.client_fd >= 0) {
         close(data.client_fd);
         data.client_fd = -1;
@@ -281,6 +293,45 @@ static void cmd_city(json_writer *w)
     json_object_end(w);
 }
 
+static int total_game_ticks(void)
+{
+    return ((game_time_year() * 12 + game_time_month()) * 16 + game_time_day()) * TICKS_PER_DAY + game_time_tick();
+}
+
+static int is_valid_speed(int speed)
+{
+    return (speed >= 10 && speed <= 100 && speed % 10 == 0) || speed == 200 || speed == 300 || speed == 500;
+}
+
+/** play <days> [speed%]: run the game in real time, like a player watching it, then pause and answer */
+static void cmd_play(json_writer *w, const char *args)
+{
+    int days = 1, speed = 100;
+    if (args && *args && sscanf(args, "%d %d", &days, &speed) < 1) {
+        days = 0;
+    }
+    if (days < 1 || days > MAX_STEP_DAYS) {
+        write_error(w, "usage: play <days 1-3840> [speed 10-100 (steps of 10), 200, 300 or 500]");
+        return;
+    }
+    if (!is_valid_speed(speed)) {
+        write_error(w, "speed must be 10-100 in steps of 10, or 200, 300, 500");
+        return;
+    }
+    if (!is_city_window()) {
+        write_error(w, "no city on screen");
+        write_window(w);
+        return;
+    }
+    setting_set_game_speed(speed);
+    data.play.active = 1;
+    data.play.days = days;
+    data.play.start_ticks = total_game_ticks();
+    data.play.target_ticks = data.play.start_ticks + days * TICKS_PER_DAY;
+    data.reply_deferred = 1;
+    game_state_unpause();
+}
+
 static void cmd_step(json_writer *w, const char *args)
 {
     int days = args && *args ? atoi(args) : 1;
@@ -415,6 +466,7 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "ping");
     json_string(w, 0, "city");
     json_string(w, 0, "step [days=1]");
+    json_string(w, 0, "play <days> [speed%] (real time, answers when done)");
     json_string(w, 0, "map [x y w h] [terrain|desirability|water ...]");
     json_string(w, 0, "buildings [type]");
     json_string(w, 0, "houses [x y w h]");
@@ -459,6 +511,8 @@ static void execute(char *line)
         cmd_ping(&w);
     } else if (strcmp(line, "city") == 0) {
         cmd_city(&w);
+    } else if (strcmp(line, "play") == 0) {
+        cmd_play(&w, args);
     } else if (strcmp(line, "step") == 0) {
         cmd_step(&w, args);
     } else if (strcmp(line, "buildable") == 0) {
@@ -525,6 +579,10 @@ static void execute(char *line)
     }
     json_object_end(&w);
 
+    if (data.reply_deferred) {
+        data.reply_deferred = 0;
+        return; // answered when the command finishes
+    }
     if (w.overflow) {
         json_init(&w, data.output, OUTPUT_BUFFER_SIZE - 1);
         json_object_start(&w, 0);
@@ -532,6 +590,28 @@ static void execute(char *line)
         json_object_end(&w);
     }
     send_output();
+}
+
+static void finish_play(const char *stopped_by)
+{
+    game_state_pause();
+    data.play.active = 0;
+    json_writer w;
+    json_init(&w, data.output, OUTPUT_BUFFER_SIZE - 1);
+    json_object_start(&w, 0);
+    json_string(&w, "command", "play");
+    json_bool(&w, "ok", 1);
+    json_int(&w, "days_requested", data.play.days);
+    json_int(&w, "ticks_run", total_game_ticks() - data.play.start_ticks);
+    if (stopped_by) {
+        json_string(&w, "stopped_by", stopped_by);
+        write_window(&w);
+    }
+    write_date(&w);
+    json_object_end(&w);
+    if (data.client_fd >= 0) {
+        send_output();
+    }
 }
 
 static void accept_client(void)
@@ -559,6 +639,8 @@ static void accept_client(void)
     log_info("Agent: client connected, game paused", 0, 0);
 }
 
+static void process_input(void);
+
 static void read_client(void)
 {
     ssize_t n = recv(data.client_fd, data.input + data.input_len, INPUT_BUFFER_SIZE - 1 - data.input_len, 0);
@@ -571,10 +653,15 @@ static void read_client(void)
     }
     data.input_len += (int) n;
     data.input[data.input_len] = 0;
+    process_input();
+}
 
+/** Executes complete command lines; stops while a deferred command (play) is running */
+static void process_input(void)
+{
     char *start = data.input;
     char *newline;
-    while (data.client_fd >= 0 && (newline = strchr(start, '\n')) != 0) {
+    while (data.client_fd >= 0 && !data.play.active && (newline = strchr(start, '\n')) != 0) {
         *newline = 0;
         if (newline > start && newline[-1] == '\r') {
             newline[-1] = 0;
@@ -602,6 +689,18 @@ void agent_poll(void)
         return;
     }
     accept_client();
+    if (data.play.active) {
+        // Real-time play: the normal game loop advances time; answer once done or interrupted
+        if (!is_city_window()) {
+            finish_play("window_changed");
+        } else if (total_game_ticks() >= data.play.target_ticks) {
+            finish_play(0);
+        } else {
+            return;
+        }
+        process_input(); // commands that arrived while playing
+        return;
+    }
     if (data.client_fd >= 0) {
         read_client();
     }
