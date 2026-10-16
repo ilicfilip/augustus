@@ -110,8 +110,9 @@ static void write_peace(json_writer *w)
     json_int(w, "rioters", city_data.ratings.peace_num_rioters);
     json_int(w, "buildings_destroyed", city_data.ratings.peace_destroyed_buildings);
     json_object_end(w);
-    json_string(w, "how", "yearly: +2 (first 2 calm years) or +5; -1 any criminals, -5 any rioters, -1 per destroyed "
-        "building; a riot or destroyed building resets the calm-year count");
+    json_string(w, "how", "yearly: +2 (first 2 calm years) or +5; -1 any criminals, -5 any rioters, -1 per building "
+        "destroyed by enemies/rioters (fire and collapse don't count); a riot or such a loss resets the calm-year "
+        "count. Keep every house happy (no squalor, jobs, wages) so there are no criminals or rioters");
     json_object_end(w);
 }
 

@@ -191,6 +191,7 @@ static const char *window_name(void)
         case WINDOW_MESSAGE_DIALOG: return "message_dialog";
         case WINDOW_MESSAGE_LIST: return "message_list";
         case WINDOW_BUILDING_INFO: return "building_info";
+        case WINDOW_ADVISORS: return "advisors";
         case WINDOW_MISSION_END: return "mission_end";
         case WINDOW_MISSION_BRIEFING: return "mission_briefing";
         case WINDOW_MISSION_SELECTION: return "mission_selection";
@@ -428,11 +429,28 @@ static void cmd_close(json_writer *w)
         write_error(w, "nothing to close");
         return;
     }
-    if (window_get_id() != WINDOW_MESSAGE_DIALOG && window_get_id() != WINDOW_MESSAGE_LIST &&
-        window_get_id() != WINDOW_BUILDING_INFO) {
-        write_error(w, "this window can't be closed by the agent yet");
-        write_window(w);
-        return;
+    // Message popups and in-game panels a watching player may have opened (advisors, building info, …)
+    switch (window_get_id()) {
+        case WINDOW_MESSAGE_DIALOG:
+        case WINDOW_MESSAGE_LIST:
+        case WINDOW_BUILDING_INFO:
+        case WINDOW_ADVISORS:
+        case WINDOW_LABOR_PRIORITY:
+        case WINDOW_SET_SALARY:
+        case WINDOW_DONATE_TO_CITY:
+        case WINDOW_GIFT_TO_EMPEROR:
+        case WINDOW_TRADE_PRICES:
+        case WINDOW_RESOURCE_SETTINGS:
+        case WINDOW_HOLD_FESTIVAL:
+        case WINDOW_EMPIRE:
+        case WINDOW_TRADE_OPENED:
+        case WINDOW_TRADE_LEDGER:
+        case WINDOW_OVERLAY_MENU:
+            break;
+        default:
+            write_error(w, "this window can't be closed by the agent yet");
+            write_window(w);
+            return;
     }
     window_city_show();
     json_bool(w, "ok", 1);
