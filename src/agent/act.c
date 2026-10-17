@@ -5,7 +5,9 @@
 #include "building/construction.h"
 #include "building/menu.h"
 #include "building/properties.h"
+#include "city/data_private.h"
 #include "city/finance.h"
+#include "city/labor.h"
 #include "city/view.h"
 #include "city/warning.h"
 #include "core/encoding.h"
@@ -238,6 +240,54 @@ static int buildings_with_road_near(int x1, int y1, int x2, int y2, unsigned int
     return count;
 }
 
+/** Jobs in every placed building (the game's own total skips buildings its labour seekers haven't reached yet) */
+static int total_jobs(void)
+{
+    int jobs = 0;
+    for (int id = 1; id < building_count(); id++) {
+        building *b = building_get(id);
+        if ((b->state == BUILDING_STATE_IN_USE || b->state == BUILDING_STATE_CREATED) && building_main(b) == b) {
+            jobs += model_get_building(b->type)->laborers;
+        }
+    }
+    return jobs;
+}
+
+/**
+ * After placing a workplace: jobs vs the city's workforce (city/labor.c: 60 % of people aged 20-49, times the
+ * plebs share; about 42-45 % of the population in practice). Too many jobs = buildings stand empty, by priority.
+ */
+static void write_labour_balance(json_writer *w, building_type type)
+{
+    int needs = model_get_building(type)->laborers;
+    if (needs <= 0) {
+        return;
+    }
+    int workforce = city_data.labor.workers_available;
+    int jobs = total_jobs();
+    json_object_start(w, "labour");
+    json_int(w, "this_needs", needs);
+    int reached = 0;
+    for (int i = 0; i < 9; i++) { // labour categories, city/labor.c
+        reached += city_labor_category(i)->workers_needed;
+    }
+    json_int(w, "jobs_in_city", jobs);
+    json_int(w, "jobs_not_reached", jobs - reached > 0 ? jobs - reached : 0);
+    json_int(w, "workforce", workforce);
+    json_int(w, "unemployed", city_data.labor.workers_unemployed);
+    json_int(w, "population", city_data.population.population);
+    json_object_end(w);
+    if (jobs > workforce) {
+        char text[400];
+        snprintf(text, sizeof(text), "the city now has %d jobs for %d workers (workforce is about 45%% of the "
+            "population): %d jobs will stay empty, lowest labour priorities first (jobs_not_reached = buildings no "
+            "labour seeker has reached yet; they compete once reached). Build in waves: housing first, then only "
+            "as many workplaces as people can staff; add industry when unemployment rises above ~10%%",
+            jobs, workforce, jobs - workforce);
+        json_string(w, "labour_warning", text);
+    }
+}
+
 static void construct(json_writer *w, building_type type, int x, int y, int x2, int y2)
 {
     int road_before[MAX_ROAD_TILES];
@@ -350,6 +400,9 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
             json_string(w, "note", "routed around obstacles; for a straight line clear trees/rubble on the direct "
                 "path first (clear), rocks and water can't be cleared");
         }
+    }
+    if (changed && !needed_confirmation && type != BUILDING_CLEAR_LAND) {
+        write_labour_balance(w, type);
     }
     if (changed && (type == BUILDING_FOUNTAIN || type == BUILDING_BATHHOUSE)) {
         // The game's "needs access to a full reservoir" warning also appears while a reservoir merely isn't full
