@@ -611,7 +611,8 @@ static void execute(char *line)
         }
     } else if (strcmp(line, "set") == 0 || strcmp(line, "storage") == 0 || strcmp(line, "market") == 0 ||
         strcmp(line, "roadblock") == 0 || strcmp(line, "save") == 0) {
-        if (!is_city_window()) {
+        // Saving also works on the victory dialog: after accepting, the city is gone (videos, mission end)
+        if (!is_city_window() && !(strcmp(line, "save") == 0 && window_get_id() == WINDOW_VICTORY_DIALOG)) {
             write_error(&w, "no city on screen");
             write_window(&w);
         } else if (strcmp(line, "set") == 0) {
