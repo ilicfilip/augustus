@@ -32,6 +32,34 @@ static void write_error(json_writer *w, const char *message)
     json_string(w, "error", message);
 }
 
+static int road_trip(building *from, building *to, int *direct);
+
+/** Nearest storage on the same road network that accepts the good, staffed or not (early on, none is staffed) */
+static int nearest_accepting_storage(building *producer, resource_type r)
+{
+    int best = 0, best_dist = 10000;
+    building_type types[2] = { BUILDING_GRANARY, BUILDING_WAREHOUSE };
+    for (int t = resource_is_food(r) ? 0 : 1; t < 2; t++) {
+        for (building *s = building_first_of_type(types[t]); s; s = s->next_of_type) {
+            const building_storage *st = building_storage_get(s->storage_id);
+            if (s->state != BUILDING_STATE_IN_USE || !s->has_road_access || !st ||
+                s->road_network_id != producer->road_network_id ||
+                st->resource_state[r].state == BUILDING_STORAGE_STATE_NOT_ACCEPTING) {
+                continue;
+            }
+            int dist = building_dist(producer->x, producer->y, producer->size, producer->size, s);
+            if (dist < best_dist) {
+                best_dist = dist;
+                best = s->id;
+            }
+        }
+        if (best) {
+            return best; // food goes to a granary first, like the cart pusher
+        }
+    }
+    return 0;
+}
+
 static int is_storage(const building *b)
 {
     return b && b->state == BUILDING_STATE_IN_USE && (b->type == BUILDING_WAREHOUSE || b->type == BUILDING_GRANARY);
@@ -215,6 +243,47 @@ void agent_logistics_storage_report(json_writer *w)
     }
     json_array_end(w);
 
+    // (helper below) Carts walk the roads: a producer whose storage is far around by road loses trips (PLAY5's farm road went
+    // around a forest). Destination as figuretype/cartpusher.c picks it: granary first for food, else warehouse.
+    json_array_start(w, "long_deliveries");
+    for (int id = 1; id < building_count(); id++) {
+        building *b = building_get(id);
+        if (b->state != BUILDING_STATE_IN_USE || !is_producer(b->type) || !b->has_road_access) {
+            continue;
+        }
+        resource_type r = b->output_resource_id;
+        int understaffed = 0;
+        map_point dst;
+        int storage_id = resource_is_food(r) ?
+            building_granary_for_storing(b->x, b->y, r, b->road_network_id, 0, &understaffed, &dst) : 0;
+        if (!storage_id) {
+            storage_id = building_warehouse_for_storing(0, b->x, b->y, r, b->road_network_id, &understaffed, &dst);
+        }
+        if (!storage_id) {
+            storage_id = nearest_accepting_storage(b, r);
+        }
+        if (!storage_id) {
+            continue;
+        }
+        building *s = building_get(storage_id);
+        int direct = 0;
+        int trip = road_trip(b, s, &direct);
+        if (trip < 0 || trip < direct + 8 || trip * 10 < direct * 13) {
+            continue;
+        }
+        json_object_start(w, 0);
+        json_int(w, "id", b->id);
+        json_string(w, "type", agent_building_type_name(b->type));
+        json_int(w, "x", b->x);
+        json_int(w, "y", b->y);
+        json_int(w, "storage_id", s->id);
+        json_string(w, "storage_type", agent_building_type_name(s->type));
+        json_int(w, "road_trip_tiles", trip);
+        json_int(w, "shortest_possible", direct);
+        json_object_end(w);
+    }
+    json_array_end(w);
+
     json_array_start(w, "stuck_producers");
     for (int id = 1; id < building_count(); id++) {
         building *b = building_get(id);
@@ -286,7 +355,7 @@ static const char *supply_blocker(building *b, building *dist, int permission, i
 }
 
 /** Tiles the buyer walks one way, between the two road access tiles (as figure/route.c routes it); -1 if none */
-static int road_trip(building *from, building *to)
+static int road_trip(building *from, building *to, int *direct)
 {
     map_point a, b;
     int to_road = to->type == BUILDING_GRANARY ? map_has_road_access_granary(to->x, to->y, &b) :
@@ -294,13 +363,17 @@ static int road_trip(building *from, building *to)
     if (!map_has_road_access(from->x, from->y, building_properties_for_type(from->type)->size, &a) || !to_road) {
         return -1;
     }
+    if (direct) {
+        *direct = (a.x > b.x ? a.x - b.x : b.x - a.x) + (a.y > b.y ? a.y - b.y : b.y - a.y);
+    }
     if (a.x == b.x && a.y == b.y) {
         return 0;
     }
     if (!map_routing_citizen_can_travel_over_road_garden(a.x, a.y, b.x, b.y, 4)) {
         return -1;
     }
-    return map_routing_distance(map_grid_offset(b.x, b.y)) - 1;
+    // map/routing.c route_queue_from_to counts 2 per road tile (1 on a highway) from 1 at the start
+    return (map_routing_distance(map_grid_offset(b.x, b.y)) - 1 + 1) / 2;
 }
 
 static figure *market_supplier(const building *b)
@@ -398,7 +471,7 @@ void agent_logistics_supply(json_writer *w, const char *args)
             if (blocker) {
                 json_string(w, "why_not", blocker);
             } else {
-                int trip = road_trip(b, s);
+                int trip = road_trip(b, s, 0);
                 json_int(w, "road_trip_tiles", trip);
                 if (trip >= 40 && trip > 3 * distance) {
                     json_string(w, "slow", "the buyer's road route is far longer than the straight distance (the "

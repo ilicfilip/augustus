@@ -6,9 +6,13 @@
 #include "building/roadblock.h"
 #include "core/config.h"
 #include "figure/roamer_preview.h"
+#include "map/point.h"
 #include "map/building.h"
 #include "map/grid.h"
+#include "map/road_access.h"
+#include "map/routing.h"
 #include "map/terrain.h"
+#include "scenario/map.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -280,6 +284,130 @@ static int is_roadblock_at(int x, int y)
     return id && building_type_is_roadblock(building_main(building_get(id))->type);
 }
 
+#define MAX_THROUGH_PATH 4096
+
+/**
+ * The road route from the map entry to the exit (immigrants and traders walk it), as grid offsets from the exit
+ * back to the entry; 0 if there is none. Walks back down the distances map/routing.c just computed.
+ */
+static int through_road_path(int *offsets)
+{
+    map_point entry = scenario_map_entry(), exit = scenario_map_exit();
+    int ex, ey, xx, xy;
+    if (!in_map(entry.x, entry.y) || !in_map(exit.x, exit.y) ||
+        !map_closest_road_within_radius(entry.x, entry.y, 1, 2, &ex, &ey) ||
+        !map_closest_road_within_radius(exit.x, exit.y, 1, 2, &xx, &xy) ||
+        !map_routing_citizen_can_travel_over_road_garden(ex, ey, xx, xy, 4)) {
+        return 0;
+    }
+    static const int DX[] = { 0, 1, 0, -1 }, DY[] = { -1, 0, 1, 0 };
+    int x = xx, y = xy, n = 0;
+    int dist = map_routing_distance(map_grid_offset(x, y));
+    offsets[n++] = map_grid_offset(x, y);
+    while (dist > 1 && n < MAX_THROUGH_PATH) {
+        int best = -1, best_dist = dist;
+        for (int d = 0; d < 4; d++) {
+            if (!in_map(x + DX[d], y + DY[d])) {
+                continue;
+            }
+            int next = map_routing_distance(map_grid_offset(x + DX[d], y + DY[d]));
+            if (next > 0 && next < best_dist) {
+                best = d;
+                best_dist = next;
+            }
+        }
+        if (best < 0) {
+            break;
+        }
+        x += DX[best];
+        y += DY[best];
+        dist = best_dist;
+        offsets[n++] = map_grid_offset(x, y);
+    }
+    return n;
+}
+
+static int has_house_within_2(int grid_offset)
+{
+    int x = map_grid_offset_to_x(grid_offset), y = map_grid_offset_to_y(grid_offset);
+    for (int yy = y - SERVICE_RADIUS; yy <= y + SERVICE_RADIUS; yy++) {
+        for (int xx = x - SERVICE_RADIUS; xx <= x + SERVICE_RADIUS; xx++) {
+            if (in_map(xx, yy)) {
+                building *b = building_get(map_building_at(map_grid_offset(xx, yy)));
+                if (b->id && is_listed_house(b)) {
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static void write_point(json_writer *w, const char *key, int grid_offset)
+{
+    json_object_start(w, key);
+    json_int(w, "x", map_grid_offset_to_x(grid_offset));
+    json_int(w, "y", map_grid_offset_to_y(grid_offset));
+    json_object_end(w);
+}
+
+/**
+ * Houses on the entry-exit road: their services' roamers wander along it to the map edge unless a roadblock
+ * stands on it beyond the last house on each side (traders and immigrants still pass roadblocks).
+ */
+static void write_through_road(json_writer *w)
+{
+    static int path[MAX_THROUGH_PATH];
+    int n = through_road_path(path);
+    json_object_start(w, "through_road");
+    json_int(w, "tiles", n);
+    if (!n) {
+        json_string(w, "note", "no road from the map entry to the exit");
+        json_object_end(w);
+        return;
+    }
+    int first = -1, last = -1, houses_tiles = 0;
+    for (int i = 0; i < n; i++) {
+        if (has_house_within_2(path[i])) {
+            if (first < 0) {
+                first = i;
+            }
+            last = i;
+            houses_tiles++;
+        }
+    }
+    json_int(w, "tiles_next_to_houses", houses_tiles);
+    if (first < 0) {
+        json_string(w, "note", "no houses along the entry-exit road");
+        json_object_end(w);
+        return;
+    }
+    // path runs exit -> entry: indexes below `first` are on the exit side, above `last` on the entry side
+    int exit_block = 0, entry_block = 0;
+    for (int i = 0; i < first; i++) {
+        exit_block |= is_roadblock_at(map_grid_offset_to_x(path[i]), map_grid_offset_to_y(path[i]));
+    }
+    for (int i = last + 1; i < n; i++) {
+        entry_block |= is_roadblock_at(map_grid_offset_to_x(path[i]), map_grid_offset_to_y(path[i]));
+    }
+    write_point(w, "houses_from", path[last]);
+    write_point(w, "houses_to", path[first]);
+    json_bool(w, "roadblock_exit_side", exit_block);
+    json_bool(w, "roadblock_entry_side", entry_block);
+    if (!exit_block && first > 0) {
+        write_point(w, "suggest_roadblock_exit_side", path[first - 1]);
+    }
+    if (!entry_block && last + 1 < n) {
+        write_point(w, "suggest_roadblock_entry_side", path[last + 1]);
+    }
+    if (!exit_block || !entry_block) {
+        json_string(w, "warning", "houses sit on the map's entry-exit road with no roadblock beyond them: prefects, "
+            "engineers, priests, market ladies... wander off along it toward the map edge. Put a roadblock on the "
+            "suggested tile(s), just past the last house (immigrants and traders still pass)");
+    }
+    json_object_end(w);
+}
+
 void agent_layout_review(json_writer *w, const char *args)
 {
     int x = 0, y = 0, w_tiles = map_grid_width(), h_tiles = map_grid_height();
@@ -413,4 +541,5 @@ void agent_layout_review(json_writer *w, const char *args)
         json_object_end(w);
     }
     json_array_end(w);
+    write_through_road(w);
 }
