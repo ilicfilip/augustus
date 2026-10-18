@@ -3,6 +3,7 @@
 #include "agent/observe.h"
 #include "building/building.h"
 #include "building/industry.h"
+#include "building/properties.h"
 #include "building/roadblock.h"
 #include "core/config.h"
 #include "figure/roamer_preview.h"
@@ -284,6 +285,68 @@ static int is_roadblock_at(int x, int y)
     return id && building_type_is_roadblock(building_main(building_get(id))->type);
 }
 
+/** Road tiles that count for a building's access, excluding roadblocks (map/road_access.c), but not x,y */
+static int other_access_roads(building *b, int x, int y)
+{
+    int count = 0;
+    if (b->type == BUILDING_GRANARY || b->type == BUILDING_WAREHOUSE) {
+        // fixed entrance tiles: granary mid-edges of the 3x3, warehouse around its main tile
+        static const int GRANARY[4][2] = { { 1, -1 }, { 3, 1 }, { 1, 3 }, { -1, 1 } };
+        static const int WAREHOUSE[4][2] = { { 0, -1 }, { 1, 0 }, { 0, 1 }, { -1, 0 } };
+        for (int i = 0; i < 4; i++) {
+            int tx = b->x + (b->type == BUILDING_GRANARY ? GRANARY[i][0] : WAREHOUSE[i][0]);
+            int ty = b->y + (b->type == BUILDING_GRANARY ? GRANARY[i][1] : WAREHOUSE[i][1]);
+            count += (tx != x || ty != y) && road_at(tx, ty) && !is_roadblock_at(tx, ty);
+        }
+        return count;
+    }
+    int size = b->size > 0 ? b->size : 1;
+    for (int ty = b->y - 1; ty <= b->y + size; ty++) {
+        for (int tx = b->x - 1; tx <= b->x + size; tx++) {
+            int edge = (tx == b->x - 1 || tx == b->x + size) != (ty == b->y - 1 || ty == b->y + size);
+            count += edge && (tx != x || ty != y) && road_at(tx, ty) && !is_roadblock_at(tx, ty);
+        }
+    }
+    return count;
+}
+
+/**
+ * The building that would lose its only road if a roadblock stood on x,y (a roadblock tile doesn't count as road
+ * for granaries, warehouses and ordinary buildings; houses take any road within 2 tiles), or 0
+ */
+static building *roadblock_cuts_access(int x, int y)
+{
+    for (int yy = y - 3; yy <= y + 1; yy++) {
+        for (int xx = x - 3; xx <= x + 1; xx++) {
+            if (!in_map(xx, yy)) {
+                continue;
+            }
+            building *b = building_main(building_get(map_building_at(map_grid_offset(xx, yy))));
+            // granaries and warehouses count as roadblock types in Augustus (they can stop walkers), still check them
+            int roadblock = building_type_is_roadblock(b->type) && b->type != BUILDING_GRANARY &&
+                b->type != BUILDING_WAREHOUSE;
+            if (!b->id || b->state != BUILDING_STATE_IN_USE || b->house_size || roadblock ||
+                building_properties_for_type(b->type)->shared) {
+                continue;
+            }
+            int size = b->size > 0 ? b->size : 1;
+            int touches = x >= b->x - 1 && x <= b->x + size && y >= b->y - 1 && y <= b->y + size;
+            if (touches && road_at(x, y) && !other_access_roads(b, x, y)) {
+                return b;
+            }
+        }
+    }
+    return 0;
+}
+
+static void write_access_note(json_writer *w, const char *key, building *b)
+{
+    char text[200];
+    snprintf(text, sizeof(text), "the nearer tile is the only road of %s %d at %d,%d (a roadblock doesn't count as "
+        "road for access), so the suggestion moved one tile on", agent_building_type_name(b->type), b->id, b->x, b->y);
+    json_string(w, key, text);
+}
+
 #define MAX_THROUGH_PATH 4096
 
 /**
@@ -395,10 +458,34 @@ static void write_through_road(json_writer *w)
     json_bool(w, "roadblock_exit_side", exit_block);
     json_bool(w, "roadblock_entry_side", entry_block);
     if (!exit_block && first > 0) {
-        write_point(w, "suggest_roadblock_exit_side", path[first - 1]);
+        int i = first - 1;
+        building *cut = roadblock_cuts_access(map_grid_offset_to_x(path[i]), map_grid_offset_to_y(path[i]));
+        building *first_cut = cut;
+        while (cut && i > 0) {
+            i--;
+            cut = roadblock_cuts_access(map_grid_offset_to_x(path[i]), map_grid_offset_to_y(path[i]));
+        }
+        if (!cut) {
+            write_point(w, "suggest_roadblock_exit_side", path[i]);
+        }
+        if (first_cut) {
+            write_access_note(w, "exit_side_note", first_cut);
+        }
     }
     if (!entry_block && last + 1 < n) {
-        write_point(w, "suggest_roadblock_entry_side", path[last + 1]);
+        int i = last + 1;
+        building *cut = roadblock_cuts_access(map_grid_offset_to_x(path[i]), map_grid_offset_to_y(path[i]));
+        building *first_cut = cut;
+        while (cut && i + 1 < n) {
+            i++;
+            cut = roadblock_cuts_access(map_grid_offset_to_x(path[i]), map_grid_offset_to_y(path[i]));
+        }
+        if (!cut) {
+            write_point(w, "suggest_roadblock_entry_side", path[i]);
+        }
+        if (first_cut) {
+            write_access_note(w, "entry_side_note", first_cut);
+        }
     }
     if (!exit_block || !entry_block) {
         json_string(w, "warning", "houses sit on the map's entry-exit road with no roadblock beyond them: prefects, "
@@ -465,12 +552,23 @@ void agent_layout_review(json_writer *w, const char *args)
                 continue;
             }
             leaks++;
+            int sx = xx + dx[best], sy = yy + dy[best];
+            building *cut = roadblock_cuts_access(sx, sy);
+            if (cut && road_at(sx + dx[best], sy + dy[best]) && !roadblock_cuts_access(sx + dx[best], sy + dy[best])) {
+                sx += dx[best]; // one tile further down the branch keeps that building's road
+                sy += dy[best];
+            }
             json_object_start(w, 0);
             json_int(w, "junction_x", xx);
             json_int(w, "junction_y", yy);
             json_int(w, "branches", branches);
-            json_int(w, "suggest_roadblock_x", xx + dx[best]);
-            json_int(w, "suggest_roadblock_y", yy + dy[best]);
+            if (!roadblock_cuts_access(sx, sy)) {
+                json_int(w, "suggest_roadblock_x", sx);
+                json_int(w, "suggest_roadblock_y", sy);
+            }
+            if (cut) {
+                write_access_note(w, "note", cut);
+            }
             json_object_end(w);
         }
     }

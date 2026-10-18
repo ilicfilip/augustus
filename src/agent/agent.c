@@ -182,6 +182,12 @@ static int is_city_window(void)
     }
 }
 
+/** City data can be read here: the city screens, and the victory dialog (the city is still loaded behind it) */
+static int can_read_city(void)
+{
+    return is_city_window() || window_get_id() == WINDOW_VICTORY_DIALOG;
+}
+
 static const char *window_name(void)
 {
     switch (window_get_id()) {
@@ -243,7 +249,7 @@ static void cmd_ping(json_writer *w)
 
 static void cmd_city(json_writer *w)
 {
-    if (!is_city_window()) {
+    if (!can_read_city()) {
         write_error(w, "no city on screen");
         write_window(w);
         return;
@@ -515,6 +521,7 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "build <type> <x> <y> [x2 y2]");
     json_string(w, 0, "clear <x> <y> [x2 y2]");
     json_string(w, 0, "undo");
+    json_string(w, 0, "sites <type> <x> <y> [radius]");
     json_string(w, 0, "set tax <0-25> | set wages <0-100> | set priority <category> <0-9>");
     json_string(w, 0, "storage <id> [<resource> <accept|get|refuse|keep> [4-32] | permission <name> <on|off>]");
     json_string(w, 0, "market <id> [<resource> <on|off>]");
@@ -574,21 +581,21 @@ static void execute(char *line)
     } else if (strcmp(line, "step") == 0) {
         cmd_step(&w, args);
     } else if (strcmp(line, "risks") == 0) {
-        if (!is_city_window()) {
+        if (!can_read_city()) {
             write_error(&w, "no city on screen");
             write_window(&w);
         } else {
             agent_observe_risks(&w, args);
         }
     } else if (strcmp(line, "buildable") == 0) {
-        if (!is_city_window()) {
+        if (!can_read_city()) {
             write_error(&w, "no city on screen");
             write_window(&w);
         } else {
             agent_observe_buildable(&w);
         }
     } else if (strcmp(line, "map") == 0 || strcmp(line, "buildings") == 0 || strcmp(line, "houses") == 0) {
-        if (!is_city_window()) {
+        if (!can_read_city()) {
             write_error(&w, "no city on screen");
             write_window(&w);
         } else if (line[0] == 'm') {
@@ -597,6 +604,13 @@ static void execute(char *line)
             agent_observe_buildings(&w, args);
         } else {
             agent_observe_houses(&w, args);
+        }
+    } else if (strcmp(line, "sites") == 0) {
+        if (!can_read_city()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else {
+            agent_act_sites(&w, args);
         }
     } else if (strcmp(line, "build") == 0 || strcmp(line, "clear") == 0 || strcmp(line, "undo") == 0) {
         if (!is_city_window()) {
@@ -643,7 +657,7 @@ static void execute(char *line)
             agent_rome_dispatch(&w, args);
         }
     } else if (strcmp(line, "walker_preview") == 0 || strcmp(line, "layout_review") == 0) {
-        if (!is_city_window()) {
+        if (!can_read_city()) {
             write_error(&w, "no city on screen");
             write_window(&w);
         } else if (line[0] == 'w') {
@@ -652,7 +666,7 @@ static void execute(char *line)
             agent_layout_review(&w, args);
         }
     } else if (strcmp(line, "ratings") == 0 || strcmp(line, "finance") == 0) {
-        if (!is_city_window()) {
+        if (!can_read_city()) {
             write_error(&w, "no city on screen");
             write_window(&w);
         } else if (line[0] == 'r') {
@@ -661,7 +675,7 @@ static void execute(char *line)
             agent_ratings_finance(&w);
         }
     } else if (strcmp(line, "depot") == 0 || strcmp(line, "storage_report") == 0 || strcmp(line, "supply") == 0) {
-        if (!is_city_window()) {
+        if (strcmp(line, "depot") == 0 ? !is_city_window() : !can_read_city()) {
             write_error(&w, "no city on screen");
             write_window(&w);
         } else if (line[0] == 'd') {
