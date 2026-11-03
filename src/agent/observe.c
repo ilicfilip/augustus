@@ -15,6 +15,7 @@
 #include "map/building.h"
 #include "map/desirability.h"
 #include "map/grid.h"
+#include "map/road_access.h"
 #include "map/terrain.h"
 #include "map/water_supply.h"
 #include "scenario/map.h"
@@ -644,6 +645,27 @@ static void write_stock(json_writer *w, building *b)
     }
 }
 
+/**
+ * Road access by the game's own rule for the type (building/maintenance.c check_rome_access): granaries and
+ * warehouses use fixed entrance tiles, houses any road within 2 tiles, the rest an adjacent road. A roadblock
+ * tile doesn't count as road for granaries, warehouses and ordinary buildings (map/road_access.c).
+ */
+int agent_has_road_access(building *b)
+{
+    if (b->type == BUILDING_GRANARY) {
+        return map_has_road_access_granary(b->x, b->y, 0);
+    }
+    if (b->type == BUILDING_WAREHOUSE) {
+        return map_has_road_access_warehouse(b->x, b->y, 0);
+    }
+    int size = b->size > 0 ? b->size : 1;
+    if (b->house_size) {
+        int rx, ry;
+        return map_closest_road_within_radius(b->x, b->y, size, 2, &rx, &ry);
+    }
+    return map_has_road_access(b->x, b->y, size, 0);
+}
+
 void agent_observe_buildings(json_writer *w, const char *args)
 {
     char filter[48] = "";
@@ -676,7 +698,9 @@ void agent_observe_buildings(json_writer *w, const char *args)
             json_int(w, "workers", b->num_workers);
             json_int(w, "workers_needed", laborers);
         }
-        json_bool(w, "road_access", b->has_road_access);
+        json_bool(w, "road_access", agent_has_road_access(b));
+        // As building/maintenance.c check_rome_access: the road reaches the map entry (walkers, workers, carts)
+        json_bool(w, "connected_to_entry", b->distance_from_entry > 0);
         if (b->state == BUILDING_STATE_MOTHBALLED) {
             json_bool(w, "mothballed", 1);
         }
@@ -781,7 +805,9 @@ void agent_observe_houses(json_writer *w, const char *args)
             1000 : house_model->evolve_desirability);
         json_int(w, "devolve_at_desirability", house_model->devolve_desirability);
         json_int(w, "happiness", b->sentiment.house_happiness);
-        json_bool(w, "road_access", b->has_road_access);
+        json_bool(w, "road_access", agent_has_road_access(b));
+        // As building/maintenance.c check_rome_access: the road reaches the map entry (walkers, workers, carts)
+        json_bool(w, "connected_to_entry", b->distance_from_entry > 0);
         json_bool(w, "fountain", b->has_water_access);
         json_bool(w, "well", b->has_well_access);
         json_int(w, "foods", b->data.house.num_foods);

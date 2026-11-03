@@ -5,6 +5,7 @@
 #include "building/distribution.h"
 #include "building/granary.h"
 #include "building/industry.h"
+#include "building/monument.h"
 #include "building/market.h"
 #include "building/properties.h"
 #include "building/storage.h"
@@ -156,7 +157,8 @@ static void write_storage_building(json_writer *w, building *b)
     json_int(w, "x", b->x);
     json_int(w, "y", b->y);
     json_int(w, "staffing_percent", staffing_percent(b));
-    json_bool(w, "road_access", b->has_road_access);
+    json_bool(w, "road_access", agent_has_road_access(b));
+    json_bool(w, "connected_to_entry", b->distance_from_entry > 0);
     int stored = 0;
     json_object_start(w, "contents");
     for (resource_type r = RESOURCE_MIN; r < RESOURCE_MAX; r++) {
@@ -230,7 +232,8 @@ void agent_logistics_storage_report(json_writer *w)
     for (int id = 1; id < building_count(); id++) {
         building *b = building_get(id);
         if (b->state != BUILDING_STATE_IN_USE || building_main(b) != b || !model_get_building(b->type)->laborers ||
-            b->type == BUILDING_FOUNTAIN || b->type == BUILDING_LATRINES) {
+            b->type == BUILDING_FOUNTAIN || b->type == BUILDING_LATRINES ||
+            building_monument_is_unfinished_monument(b)) { // building sites take no workers
             continue;
         }
         if (b->houses_covered <= 0 && b->num_workers <= 0) {
@@ -410,11 +413,14 @@ void agent_logistics_supply(json_writer *w, const char *args)
     json_int(w, "id", b->id);
     json_string(w, "type", agent_building_type_name(b->type));
     json_int(w, "staffing_percent", staffing_percent(b));
-    json_bool(w, "road_access", b->has_road_access);
+    json_bool(w, "road_access", agent_has_road_access(b));
+    json_bool(w, "connected_to_entry", b->distance_from_entry > 0);
     if (b->num_workers <= 0) {
         json_string(w, "problem", "no workers: it sends no buyer at all");
-    } else if (!b->has_road_access) {
+    } else if (!agent_has_road_access(b)) {
         json_string(w, "problem", "no road access: it sends no buyer");
+    } else if (!b->has_road_access) {
+        json_string(w, "problem", "its road isn't connected to the map entry: it sends no buyer");
     }
     if (b->type == BUILDING_MARKET) {
         figure *f = market_supplier(b);

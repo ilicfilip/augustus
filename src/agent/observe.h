@@ -2,6 +2,7 @@
 #define AGENT_OBSERVE_H
 
 #include "agent/json.h"
+#include "building/building.h"
 
 /** map [x y w h] [layer...] - map region as text rows, one character per tile */
 void agent_observe_map(json_writer *w, const char *args);
@@ -32,6 +33,9 @@ int agent_resource_from_name(const char *name);
 
 /** 2 = within a filled reservoir's range, 1 = only within range of reservoirs without water yet, 0 = none */
 int agent_reservoir_reach(int x, int y, int size);
+
+/** A road touches the building by the game's rule for its type (granary/warehouse entrances, houses within 2) */
+int agent_has_road_access(building *b);
 
 /** The `terrain` map layer character for a tile */
 char agent_tile_char(int grid_offset);

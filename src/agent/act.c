@@ -226,27 +226,6 @@ static int road_tiles_in_rect(int x1, int y1, int x2, int y2, int *offsets)
     return count;
 }
 
-/**
- * Road access by the game's own rule for the type (building/maintenance.c check_rome_access): granaries and
- * warehouses use fixed entrance tiles, houses any road within 2 tiles, the rest an adjacent road. A roadblock
- * tile doesn't count as road for granaries, warehouses and ordinary buildings (map/road_access.c).
- */
-static int has_game_road_access(building *b)
-{
-    if (b->type == BUILDING_GRANARY) {
-        return map_has_road_access_granary(b->x, b->y, 0);
-    }
-    if (b->type == BUILDING_WAREHOUSE) {
-        return map_has_road_access_warehouse(b->x, b->y, 0);
-    }
-    int size = b->size > 0 ? b->size : 1;
-    if (b->house_size) {
-        int rx, ry;
-        return map_closest_road_within_radius(b->x, b->y, size, 2, &rx, &ry);
-    }
-    return map_has_road_access(b->x, b->y, size, 0);
-}
-
 /** Buildings near the rectangle that have road access now (a clear or a roadblock may take it away) */
 static int buildings_with_road_near(int x1, int y1, int x2, int y2, unsigned int *ids)
 {
@@ -263,7 +242,7 @@ static int buildings_with_road_near(int x1, int y1, int x2, int y2, unsigned int
         if (b->x > max_x || b->x + size - 1 < min_x || b->y > max_y || b->y + size - 1 < min_y) {
             continue;
         }
-        if (has_game_road_access(b)) {
+        if (agent_has_road_access(b)) {
             ids[count++] = b->id;
         }
     }
@@ -473,7 +452,7 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
         json_array_start(w, "lost_road_access");
         for (int i = 0; i < num_roaded; i++) {
             building *b = building_get(roaded_ids[i]);
-            if (b->state == BUILDING_STATE_IN_USE && !has_game_road_access(b)) {
+            if (b->state == BUILDING_STATE_IN_USE && !agent_has_road_access(b)) {
                 lost++;
                 json_object_start(w, 0);
                 json_int(w, "id", b->id);
