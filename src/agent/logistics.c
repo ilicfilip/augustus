@@ -516,6 +516,13 @@ static const char *carrier_state(const figure *f)
         case FIGURE_ACTION_59_WAREHOUSEMAN_RETURNING_WITH_RESOURCE: return "returning with goods";
         case FIGURE_ACTION_56_WAREHOUSEMAN_RETURNING_WITH_FOOD: return "returning with food";
         case FIGURE_ACTION_233_WAREHOUSEMAN_RECONSIDER_TARGET: return "reconsidering its target";
+        case FIGURE_ACTION_246_CARTPUSHER_DELIVERING_TO_MONUMENT: return "delivering to a monument";
+        case FIGURE_ACTION_247_CARTPUSHER_AT_MONUMENT: return "unloading at a monument";
+        case FIGURE_ACTION_248_ARMOURY_SUPPLIER_GETTING_WEAPONS: return "fetching weapons for the barracks";
+        case FIGURE_ACTION_249_ARMOURY_SUPPLIER_AT_WAREHOUSE:
+            return f->resource_id ? "waiting at the warehouse with weapons: no barracks has room, or weapons are "
+                "stockpiled" :
+                "loading weapons at the warehouse";
         default: return 0;
     }
 }
@@ -541,7 +548,15 @@ static int carried_loads(const figure *f)
         case FIGURE_ACTION_53_WAREHOUSEMAN_RETURNING_EMPTY:
         case FIGURE_ACTION_54_WAREHOUSEMAN_GETTING_FOOD:
         case FIGURE_ACTION_57_WAREHOUSEMAN_GETTING_RESOURCE:
+        case FIGURE_ACTION_248_ARMOURY_SUPPLIER_GETTING_WEAPONS:
             return 0;
+        case FIGURE_ACTION_249_ARMOURY_SUPPLIER_AT_WAREHOUSE:
+            // the game zeroes the count every tick while it waits there; resource_id says it holds weapons
+            return 1;
+        case FIGURE_ACTION_51_WAREHOUSEMAN_DELIVERING_RESOURCE:
+        case FIGURE_ACTION_52_WAREHOUSEMAN_AT_DELIVERY_BUILDING:
+            // an armoury supplier that waited at the warehouse leaves with the count still 0
+            return f->loads_sold_or_carrying ? f->loads_sold_or_carrying : 1;
         default:
             return f->loads_sold_or_carrying;
     }
