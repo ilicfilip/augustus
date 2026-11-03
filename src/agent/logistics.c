@@ -12,6 +12,7 @@
 #include "city/resource.h"
 #include "core/calc.h"
 #include "core/config.h"
+#include "core/direction.h"
 #include "figure/action.h"
 #include "figure/figure.h"
 #include "game/resource.h"
@@ -489,6 +490,124 @@ void agent_logistics_supply(json_writer *w, const char *args)
         } else {
             json_string(w, "verdict", "a usable store holds it; the buyer will fetch it when it's the most needed good");
         }
+        json_object_end(w);
+    }
+    json_array_end(w);
+}
+
+static const char *carrier_state(const figure *f)
+{
+    switch (f->action_state) {
+        case FIGURE_ACTION_20_CARTPUSHER_INITIAL: return "at its building, looking for a destination";
+        case FIGURE_ACTION_21_CARTPUSHER_DELIVERING_TO_WAREHOUSE: return "delivering to a warehouse";
+        case FIGURE_ACTION_22_CARTPUSHER_DELIVERING_TO_GRANARY: return "delivering to a granary";
+        case FIGURE_ACTION_23_CARTPUSHER_DELIVERING_TO_WORKSHOP: return "delivering to a workshop";
+        case FIGURE_ACTION_24_CARTPUSHER_AT_WAREHOUSE: return "unloading at a warehouse";
+        case FIGURE_ACTION_25_CARTPUSHER_AT_GRANARY: return "unloading at a granary";
+        case FIGURE_ACTION_26_CARTPUSHER_AT_WORKSHOP: return "unloading at a workshop";
+        case FIGURE_ACTION_27_CARTPUSHER_RETURNING: return "returning";
+        case FIGURE_ACTION_245_CARTPUSHER_WAITING_FOR_DESTINATION: return "waiting: nowhere accepts its load";
+        case FIGURE_ACTION_50_WAREHOUSEMAN_CREATED: return "at its warehouse, looking for a destination";
+        case FIGURE_ACTION_51_WAREHOUSEMAN_DELIVERING_RESOURCE: return "delivering";
+        case FIGURE_ACTION_52_WAREHOUSEMAN_AT_DELIVERY_BUILDING: return "unloading";
+        case FIGURE_ACTION_53_WAREHOUSEMAN_RETURNING_EMPTY: return "returning empty";
+        case FIGURE_ACTION_54_WAREHOUSEMAN_GETTING_FOOD: return "fetching food";
+        case FIGURE_ACTION_57_WAREHOUSEMAN_GETTING_RESOURCE: return "fetching goods";
+        case FIGURE_ACTION_59_WAREHOUSEMAN_RETURNING_WITH_RESOURCE: return "returning with goods";
+        case FIGURE_ACTION_56_WAREHOUSEMAN_RETURNING_WITH_FOOD: return "returning with food";
+        case FIGURE_ACTION_233_WAREHOUSEMAN_RECONSIDER_TARGET: return "reconsidering its target";
+        default: return 0;
+    }
+}
+
+// Loads on the cart now. resource_id stays set on the way back, and a producer's cart counts its one load as 0
+// (cartpusher.c set_cart_graphic), so the action state decides
+static int carried_loads(const figure *f)
+{
+    if (f->resource_id == RESOURCE_NONE) {
+        return 0;
+    }
+    switch (f->action_state) {
+        case FIGURE_ACTION_20_CARTPUSHER_INITIAL:
+        case FIGURE_ACTION_21_CARTPUSHER_DELIVERING_TO_WAREHOUSE:
+        case FIGURE_ACTION_22_CARTPUSHER_DELIVERING_TO_GRANARY:
+        case FIGURE_ACTION_23_CARTPUSHER_DELIVERING_TO_WORKSHOP:
+        case FIGURE_ACTION_24_CARTPUSHER_AT_WAREHOUSE:
+        case FIGURE_ACTION_25_CARTPUSHER_AT_GRANARY:
+        case FIGURE_ACTION_26_CARTPUSHER_AT_WORKSHOP:
+        case FIGURE_ACTION_245_CARTPUSHER_WAITING_FOR_DESTINATION:
+            return f->type == FIGURE_CART_PUSHER && !f->loads_sold_or_carrying ? 1 : f->loads_sold_or_carrying;
+        case FIGURE_ACTION_27_CARTPUSHER_RETURNING:
+        case FIGURE_ACTION_53_WAREHOUSEMAN_RETURNING_EMPTY:
+        case FIGURE_ACTION_54_WAREHOUSEMAN_GETTING_FOOD:
+        case FIGURE_ACTION_57_WAREHOUSEMAN_GETTING_RESOURCE:
+            return 0;
+        default:
+            return f->loads_sold_or_carrying;
+    }
+}
+
+/**
+ * figures [x y w h] - carriers (cart pushers, warehousemen, depot carts) with their load, state and destination,
+ * to explain a cart that stands still
+ */
+void agent_logistics_figures(json_writer *w, const char *args)
+{
+    int x = 0, y = 0, w_tiles = map_grid_width(), h_tiles = map_grid_height();
+    if (args && *args && sscanf(args, "%d %d %d %d", &x, &y, &w_tiles, &h_tiles) != 4) {
+        json_bool(w, "ok", 0);
+        json_string(w, "error", "usage: figures [x y w h]");
+        return;
+    }
+    json_bool(w, "ok", 1);
+    json_array_start(w, "figures");
+    for (int id = 1; id < figure_count(); id++) {
+        figure *f = figure_get(id);
+        if (f->state != FIGURE_STATE_ALIVE || (f->type != FIGURE_CART_PUSHER && f->type != FIGURE_WAREHOUSEMAN &&
+            f->type != FIGURE_DEPOT_CART_PUSHER) || f->x < x || f->y < y || f->x >= x + w_tiles ||
+            f->y >= y + h_tiles) {
+            continue;
+        }
+        json_object_start(w, 0);
+        json_int(w, "id", f->id);
+        json_string(w, "type", f->type == FIGURE_CART_PUSHER ? "cart_pusher" :
+            f->type == FIGURE_WAREHOUSEMAN ? "warehouseman" : "depot_cart_pusher");
+        json_int(w, "x", f->x);
+        json_int(w, "y", f->y);
+        int loads = carried_loads(f);
+        if (loads) {
+            json_string(w, "resource", agent_resource_name(f->resource_id));
+            json_int(w, "loads", loads);
+        }
+        json_int(w, "action_state", f->action_state);
+        const char *state = carrier_state(f);
+        if (state) {
+            json_string(w, "state", state);
+        }
+        json_int(w, "wait_ticks", f->wait_ticks);
+        building *home = building_get(f->building_id);
+        if (home->id) {
+            json_object_start(w, "from");
+            json_int(w, "id", home->id);
+            json_string(w, "type", agent_building_type_name(home->type));
+            json_int(w, "x", home->x);
+            json_int(w, "y", home->y);
+            json_object_end(w);
+        }
+        building *dest = building_get(f->destination_building_id);
+        if (dest->id) {
+            json_object_start(w, "to");
+            json_int(w, "id", dest->id);
+            json_string(w, "type", agent_building_type_name(dest->type));
+            json_int(w, "x", dest->x);
+            json_int(w, "y", dest->y);
+            json_object_end(w);
+        }
+        json_int(w, "destination_x", f->destination_x);
+        json_int(w, "destination_y", f->destination_y);
+        json_int(w, "routing_path_id", f->routing_path_id);
+        json_bool(w, "lost", f->direction == DIR_FIGURE_LOST);
+        json_bool(w, "rerouting", f->direction == DIR_FIGURE_REROUTE);
         json_object_end(w);
     }
     json_array_end(w);

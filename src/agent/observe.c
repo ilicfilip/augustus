@@ -636,8 +636,10 @@ static void write_stock(json_writer *w, building *b)
     }
     if (any) {
         json_object_end(w);
-        // Storages count cartloads; markets, temples, houses, workshops... count units (100 = one cartload)
-        json_string(w, "stock_unit", b->type == BUILDING_WAREHOUSE || b->type == BUILDING_GRANARY ?
+        // Storages and barracks (weapons) count cartloads; markets, temples, houses, workshops... count units
+        // (100 = one cartload)
+        json_string(w, "stock_unit", b->type == BUILDING_WAREHOUSE || b->type == BUILDING_GRANARY ||
+            b->type == BUILDING_BARRACKS ?
             "cartloads" : "units (100 = 1 cartload)");
     }
 }

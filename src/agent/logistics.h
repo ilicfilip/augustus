@@ -12,4 +12,7 @@ void agent_logistics_storage_report(json_writer *w);
 /** supply <distributor id> [<resource>] - why a market (temple, tavern...) does or doesn't get each good */
 void agent_logistics_supply(json_writer *w, const char *args);
 
+/** figures [x y w h] - carriers (cart pushers, warehousemen, depot carts): load, state, from/to */
+void agent_logistics_figures(json_writer *w, const char *args);
+
 #endif // AGENT_LOGISTICS_H

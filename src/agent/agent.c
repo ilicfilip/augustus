@@ -522,6 +522,7 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "clear <x> <y> [x2 y2]");
     json_string(w, 0, "undo");
     json_string(w, 0, "sites <type> <x> <y> [radius]");
+    json_string(w, 0, "figures [x y w h]");
     json_string(w, 0, "set tax <0-25> | set wages <0-100> | set priority <category> <0-9>");
     json_string(w, 0, "storage <id> [<resource> <accept|get|refuse|keep> [4-32] | permission <name> <on|off>]");
     json_string(w, 0, "market <id> [<resource> <on|off>]");
@@ -673,6 +674,13 @@ static void execute(char *line)
             agent_ratings(&w);
         } else {
             agent_ratings_finance(&w);
+        }
+    } else if (strcmp(line, "figures") == 0) {
+        if (!can_read_city()) {
+            write_error(&w, "no city on screen");
+            write_window(&w);
+        } else {
+            agent_logistics_figures(&w, args);
         }
     } else if (strcmp(line, "depot") == 0 || strcmp(line, "storage_report") == 0 || strcmp(line, "supply") == 0) {
         if (strcmp(line, "depot") == 0 ? !is_city_window() : !can_read_city()) {
