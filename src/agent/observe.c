@@ -16,6 +16,7 @@
 #include "map/desirability.h"
 #include "map/grid.h"
 #include "map/road_access.h"
+#include "map/road_network.h"
 #include "map/terrain.h"
 #include "map/water_supply.h"
 #include "scenario/map.h"
@@ -25,17 +26,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_LAYERS 5
+#define MAX_LAYERS 6
 
 typedef enum {
     LAYER_TERRAIN,
     LAYER_DESIRABILITY,
     LAYER_WATER,
     LAYER_FIRE,
-    LAYER_DAMAGE
+    LAYER_DAMAGE,
+    LAYER_ROADS
 } map_layer;
 
-static const char *LAYER_NAMES[] = { "terrain", "desirability", "water", "fire", "damage" };
+static const char *LAYER_NAMES[] = { "terrain", "desirability", "water", "fire", "damage", "roads" };
 
 #define FIRE_RISK_MAX 100   // a building catches fire above this (building/maintenance.c)
 #define DAMAGE_RISK_MAX 200 // a building collapses above this
@@ -479,6 +481,10 @@ static void write_legend(json_writer *w, map_layer layer)
             json_string(w, "legend", "collapse risk per building, 0-9 = tenths of the way to collapsing (engineers "
                 "passing reset it; 7+ = no engineer coverage) -=can't collapse .=no building");
             break;
+        case LAYER_ROADS:
+            json_string(w, "legend", "e=road joined to the map entry's road network o=road on another network "
+                "(not reachable from the entry: no workers, walkers or carts) .=no road");
+            break;
     }
 }
 
@@ -516,7 +522,7 @@ void agent_observe_map(json_writer *w, const char *args)
             }
         }
         if (!found) {
-            write_error(w, "unknown layer; use terrain, desirability, water, fire, damage");
+            write_error(w, "unknown layer; use terrain, desirability, water, fire, damage, roads");
             return;
         }
     }
@@ -549,6 +555,13 @@ void agent_observe_map(json_writer *w, const char *args)
     json_int(w, "y", exit.y);
     json_object_end(w);
 
+    int entry_network = -1;
+    for (int l = 0; l < num_layers; l++) {
+        if (layers[l] == LAYER_ROADS) {
+            entry_network = agent_entry_road_network();
+        }
+    }
+
     char row[GRID_SIZE + 1];
     json_array_start(w, "layers");
     for (int l = 0; l < num_layers; l++) {
@@ -573,6 +586,11 @@ void agent_observe_map(json_writer *w, const char *args)
                     case LAYER_DAMAGE:
                         c = risk_char(grid_offset, 0);
                         break;
+                    case LAYER_ROADS: {
+                        int network = map_road_network_get(grid_offset);
+                        c = !network ? '.' : network == entry_network ? 'e' : 'o';
+                        break;
+                    }
                     default:
                         c = agent_tile_char(grid_offset);
                         break;
@@ -650,6 +668,15 @@ static void write_stock(json_writer *w, building *b)
  * warehouses use fixed entrance tiles, houses any road within 2 tiles, the rest an adjacent road. A roadblock
  * tile doesn't count as road for granaries, warehouses and ordinary buildings (map/road_access.c).
  */
+int agent_entry_road_network(void)
+{
+    map_road_network_update(); // as the game refreshes it; act.c does the same before comparing networks
+    map_point entry = scenario_map_entry();
+    int rx, ry;
+    return map_closest_road_within_radius(entry.x, entry.y, 1, 2, &rx, &ry) ?
+        map_road_network_get(map_grid_offset(rx, ry)) : 0;
+}
+
 int agent_has_road_access(building *b)
 {
     if (b->type == BUILDING_GRANARY) {

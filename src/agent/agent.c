@@ -513,7 +513,7 @@ static void cmd_help(json_writer *w)
     json_string(w, 0, "city");
     json_string(w, 0, "step [days=1]");
     json_string(w, 0, "play <days> [speed%] (real time, answers when done)");
-    json_string(w, 0, "map [x y w h] [terrain|desirability|water ...]");
+    json_string(w, 0, "map [x y w h] [terrain|desirability|water|fire|damage|roads ...]");
     json_string(w, 0, "buildings [type]");
     json_string(w, 0, "houses [x y w h]");
     json_string(w, 0, "buildable");

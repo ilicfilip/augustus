@@ -37,6 +37,9 @@ int agent_reservoir_reach(int x, int y, int size);
 /** A road touches the building by the game's rule for its type (granary/warehouse entrances, houses within 2) */
 int agent_has_road_access(building *b);
 
+/** Id of the road network at the map entry (refreshed now), 0 if no road there */
+int agent_entry_road_network(void);
+
 /** The `terrain` map layer character for a tile */
 char agent_tile_char(int grid_offset);
 
