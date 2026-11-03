@@ -1,5 +1,6 @@
 #include "act.h"
 
+#include "agent/layout.h"
 #include "agent/observe.h"
 #include "building/building.h"
 #include "building/construction.h"
@@ -472,6 +473,11 @@ static void construct(json_writer *w, building_type type, int x, int y, int x2, 
                 "warehouses use only their entrance tiles): the buildings in lost_road_access just lost their only "
                 "road. Undo and put the roadblock one tile further along");
         }
+    }
+    if (is_roadblock && changed && agent_layout_on_through_road(x, y)) {
+        json_string(w, "main_road_note", "this roadblock stands on the map's entry-exit road: roaming walkers going "
+            "along the main road turn back here too (immigrants and traders still pass). Right past the last houses "
+            "that is what you want; to close a side road, put it one tile into the side road instead");
     }
     if (removed_roads && num_reached_before) {
         static unsigned int reached_after[MAX_HOUSES_TRACKED];

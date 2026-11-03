@@ -390,6 +390,19 @@ static int through_road_path(int *offsets)
     return n;
 }
 
+int agent_layout_on_through_road(int x, int y)
+{
+    static int path[MAX_THROUGH_PATH];
+    int n = through_road_path(path);
+    int offset = map_grid_offset(x, y);
+    for (int i = 0; i < n; i++) {
+        if (path[i] == offset) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int has_house_within_2(int grid_offset)
 {
     int x = map_grid_offset_to_x(grid_offset), y = map_grid_offset_to_y(grid_offset);
