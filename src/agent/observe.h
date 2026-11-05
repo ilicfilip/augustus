@@ -37,6 +37,9 @@ int agent_reservoir_reach(int x, int y, int size);
 /** A road touches the building by the game's rule for its type (granary/warehouse entrances, houses within 2) */
 int agent_has_road_access(building *b);
 
+/** Is the building's road on the map entry's road network now (not as of the last daily tick)? */
+int agent_connected_to_entry(building *b);
+
 /** Id of the road network at the map entry (refreshed now), 0 if no road there */
 int agent_entry_road_network(void);
 

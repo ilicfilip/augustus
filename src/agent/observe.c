@@ -677,6 +677,33 @@ int agent_entry_road_network(void)
         map_road_network_get(map_grid_offset(rx, ry)) : 0;
 }
 
+int agent_connected_to_entry(building *b)
+{
+    // b->distance_from_entry is only recalculated by the daily tick (building_maintenance_check_rome_access),
+    // so while the game is paused a freshly built road doesn't show. This asks the road network directly:
+    // is the building's road access tile on the entry's network? (No side effects, unlike the tick's check.)
+    map_point road;
+    int found;
+    int size = b->size > 0 ? b->size : 1;
+    if (b->type == BUILDING_GRANARY) {
+        found = map_has_road_access_granary(b->x, b->y, &road);
+    } else if (b->type == BUILDING_WAREHOUSE) {
+        found = map_has_road_access_warehouse(b->x, b->y, &road);
+    } else if (b->house_size) {
+        int rx, ry;
+        found = map_closest_road_within_radius(b->x, b->y, size, 2, &rx, &ry);
+        road.x = rx;
+        road.y = ry;
+    } else {
+        found = map_has_road_access(b->x, b->y, size, &road);
+    }
+    if (!found) {
+        return 0;
+    }
+    int entry = agent_entry_road_network();
+    return entry && map_road_network_get(map_grid_offset(road.x, road.y)) == entry;
+}
+
 int agent_has_road_access(building *b)
 {
     if (b->type == BUILDING_GRANARY) {
@@ -727,7 +754,7 @@ void agent_observe_buildings(json_writer *w, const char *args)
         }
         json_bool(w, "road_access", agent_has_road_access(b));
         // As building/maintenance.c check_rome_access: the road reaches the map entry (walkers, workers, carts)
-        json_bool(w, "connected_to_entry", b->distance_from_entry > 0);
+        json_bool(w, "connected_to_entry", agent_connected_to_entry(b));
         if (b->state == BUILDING_STATE_MOTHBALLED) {
             json_bool(w, "mothballed", 1);
         }
@@ -834,7 +861,7 @@ void agent_observe_houses(json_writer *w, const char *args)
         json_int(w, "happiness", b->sentiment.house_happiness);
         json_bool(w, "road_access", agent_has_road_access(b));
         // As building/maintenance.c check_rome_access: the road reaches the map entry (walkers, workers, carts)
-        json_bool(w, "connected_to_entry", b->distance_from_entry > 0);
+        json_bool(w, "connected_to_entry", agent_connected_to_entry(b));
         json_bool(w, "fountain", b->has_water_access);
         json_bool(w, "well", b->has_well_access);
         json_int(w, "foods", b->data.house.num_foods);

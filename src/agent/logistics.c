@@ -158,7 +158,7 @@ static void write_storage_building(json_writer *w, building *b)
     json_int(w, "y", b->y);
     json_int(w, "staffing_percent", staffing_percent(b));
     json_bool(w, "road_access", agent_has_road_access(b));
-    json_bool(w, "connected_to_entry", b->distance_from_entry > 0);
+    json_bool(w, "connected_to_entry", agent_connected_to_entry(b));
     int stored = 0;
     json_object_start(w, "contents");
     for (resource_type r = RESOURCE_MIN; r < RESOURCE_MAX; r++) {
@@ -414,7 +414,7 @@ void agent_logistics_supply(json_writer *w, const char *args)
     json_string(w, "type", agent_building_type_name(b->type));
     json_int(w, "staffing_percent", staffing_percent(b));
     json_bool(w, "road_access", agent_has_road_access(b));
-    json_bool(w, "connected_to_entry", b->distance_from_entry > 0);
+    json_bool(w, "connected_to_entry", agent_connected_to_entry(b));
     if (b->num_workers <= 0) {
         json_string(w, "problem", "no workers: it sends no buyer at all");
     } else if (!agent_has_road_access(b)) {
