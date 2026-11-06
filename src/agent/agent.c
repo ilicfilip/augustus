@@ -19,12 +19,14 @@
 #include "city/resource.h"
 #include "city/victory.h"
 #include "core/dir.h"
+#include "core/lang.h"
 #include "core/log.h"
 #include "core/time.h"
 #include "game/file.h"
 #include "game/settings.h"
 #include "game/state.h"
 #include "game/system.h"
+#include "game/tutorial.h"
 #include "game/tick.h"
 #include "game/time.h"
 #include "graphics/screenshot.h"
@@ -319,6 +321,15 @@ static void cmd_city(json_writer *w)
         scenario_criteria_time_limit_years());
     write_criterion(w, "survival_years", scenario_criteria_survival_enabled(), scenario_criteria_survival_years());
     json_object_end(w);
+
+    int goal_text = tutorial_get_immediate_goal_text();
+    if (goal_text) {
+        // The tutorial missions' current stage, as the mission briefing shows it; cap 0 = no tutorial cap now
+        json_object_start(w, "tutorial");
+        json_int(w, "population_cap", tutorial_get_population_cap(0));
+        json_game_string(w, "immediate_goal", lang_get_string(62, goal_text));
+        json_object_end(w);
+    }
 }
 
 static int total_game_ticks(void)
